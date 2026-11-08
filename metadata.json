@@ -1,0 +1,11 @@
+{
+  "name": "ParakeetAI - AI Interview Copilot",
+  "description": "Real-time AI Interview Copilot with speech-to-text question detection, STAR answers, coding sandbox, resume intelligence, and desktop floating companion.",
+  "requestFramePermissions": [
+    "microphone",
+    "display-capture"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

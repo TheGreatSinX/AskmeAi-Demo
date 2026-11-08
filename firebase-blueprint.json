@@ -1,0 +1,212 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access control.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "support", "user"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "UserDevice": {
+      "title": "UserDevice",
+      "description": "Active device session enforcing the 1 desktop and 1 mobile limit.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "deviceType": { "type": "string", "enum": ["desktop", "mobile"] },
+        "deviceName": { "type": "string" },
+        "lastActiveAt": { "type": "string" }
+      },
+      "required": ["userId", "deviceType"]
+    },
+    "CreditWallet": {
+      "title": "CreditWallet",
+      "description": "User credit wallet balance for pay-as-you-go sessions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "balanceCredits": { "type": "number" },
+        "lifetimePurchased": { "type": "number" },
+        "lifetimeSpent": { "type": "number" }
+      },
+      "required": ["userId", "balanceCredits"]
+    },
+    "CreditTransaction": {
+      "title": "CreditTransaction",
+      "description": "Immutable ledger record of credit transactions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["purchase", "session_deduction", "admin_grant", "refund"] },
+        "balanceAfter": { "type": "number" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "amount", "type", "balanceAfter"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "User subscription plan tier and status.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "planTier": { "type": "string", "enum": ["starter", "pro", "executive"] },
+        "status": { "type": "string", "enum": ["active", "canceled", "past_due"] },
+        "currentPeriodEnd": { "type": "string" }
+      },
+      "required": ["userId", "planTier", "status"]
+    },
+    "Resume": {
+      "title": "Resume",
+      "description": "Candidate uploaded resume with parsed skills and timeline.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSizeBytes": { "type": "number" },
+        "extractedText": { "type": "string" },
+        "isPrimary": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "fileName"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "Knowledge base research documents for RAG grounding.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "title", "content"]
+    },
+    "InterviewSession": {
+      "title": "InterviewSession",
+      "description": "Live interview session state, target company and duration.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "targetRole": { "type": "string" },
+        "targetCompany": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "paused", "completed"] },
+        "totalDurationSeconds": { "type": "number" },
+        "startedAt": { "type": "string" }
+      },
+      "required": ["userId", "targetCompany", "status"]
+    },
+    "TranscriptLine": {
+      "title": "TranscriptLine",
+      "description": "Spoken line in an interview session with question detection confidence.",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "speaker": { "type": "string", "enum": ["interviewer", "candidate"] },
+        "text": { "type": "string" },
+        "isQuestion": { "type": "boolean" },
+        "confidence": { "type": "number" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["sessionId", "speaker", "text"]
+    },
+    "SessionAnswer": {
+      "title": "SessionAnswer",
+      "description": "STAR structured AI answer generated in real-time.",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "questionText": { "type": "string" },
+        "category": { "type": "string" },
+        "answerText": { "type": "string" },
+        "answerStyle": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["sessionId", "questionText", "answerText"]
+    },
+    "SessionNotes": {
+      "title": "SessionNotes",
+      "description": "Post-session summary and thank-you email draft.",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "userId": { "type": "string" },
+        "executiveSummary": { "type": "string" },
+        "thankYouEmailDraft": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["sessionId", "userId", "executiveSummary"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Administrative actions audit log.",
+      "type": "object",
+      "properties": {
+        "adminUserId": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["adminUserId", "action", "details"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile records."
+    },
+    "/user_devices/{deviceId}": {
+      "schema": "UserDevice",
+      "description": "Device limit registry."
+    },
+    "/credit_wallets/{userId}": {
+      "schema": "CreditWallet",
+      "description": "Credit wallet for users."
+    },
+    "/credit_transactions/{txId}": {
+      "schema": "CreditTransaction",
+      "description": "Ledger transactions."
+    },
+    "/subscriptions/{userId}": {
+      "schema": "Subscription",
+      "description": "Active subscription plan."
+    },
+    "/resumes/{resumeId}": {
+      "schema": "Resume",
+      "description": "Candidate resumes."
+    },
+    "/documents/{documentId}": {
+      "schema": "Document",
+      "description": "Knowledge documents."
+    },
+    "/sessions/{sessionId}": {
+      "schema": "InterviewSession",
+      "description": "Interview session records."
+    },
+    "/session_transcripts/{transcriptId}": {
+      "schema": "TranscriptLine",
+      "description": "Transcripts."
+    },
+    "/session_answers/{answerId}": {
+      "schema": "SessionAnswer",
+      "description": "Answers."
+    },
+    "/session_notes/{notesId}": {
+      "schema": "SessionNotes",
+      "description": "AI Notes."
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Security audit records."
+    }
+  }
+}

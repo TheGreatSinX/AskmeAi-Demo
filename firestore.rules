@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all unknown collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'thegreatsinx@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && request.resource.data.role == 'user';
+      allow update: if (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'uid'])) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // User Devices (1 desktop + 1 mobile limit enforcement)
+    match /user_devices/{deviceId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Credit Wallets
+    match /credit_wallets/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin(); // Only server/admin can alter balances
+    }
+
+    // Credit Transactions (Immutable ledger)
+    match /credit_transactions/{txId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Subscriptions
+    match /subscriptions/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Resumes
+    match /resumes/{resumeId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Documents (Knowledge Base)
+    match /documents/{docId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Sessions
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // Transcripts
+    match /session_transcripts/{transcriptId} {
+      allow read: if isSignedIn() && (
+        get(/databases/$(database)/documents/sessions/$(resource.data.sessionId)).data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isSignedIn();
+    }
+
+    // Answers
+    match /session_answers/{answerId} {
+      allow read: if isSignedIn() && (
+        get(/databases/$(database)/documents/sessions/$(resource.data.sessionId)).data.userId == request.auth.uid || isAdmin()
+      );
+      allow write: if isSignedIn();
+    }
+
+    // Notes
+    match /session_notes/{noteId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Audit Logs
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}

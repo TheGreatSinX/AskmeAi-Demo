@@ -1,0 +1,309 @@
+{
+  "users": [
+    {
+      "uid": "user_dev_01",
+      "email": "thegreatsinx@gmail.com",
+      "displayName": "Alex Rivers",
+      "role": "super_admin",
+      "emailVerified": true,
+      "createdAt": "2026-10-15T09:00:00Z",
+      "updatedAt": "2026-11-08T13:13:55.479Z"
+    }
+  ],
+  "devices": [
+    {
+      "id": "dev_macbook_pro",
+      "userId": "user_dev_01",
+      "deviceType": "desktop",
+      "deviceName": "MacBook Pro (Chrome)",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      "ipAddress": "192.168.1.104",
+      "lastActiveAt": "2026-11-08T13:13:55.480Z",
+      "sessionToken": "tok_desk_active_981",
+      "isCurrent": true
+    }
+  ],
+  "wallets": {
+    "user_dev_01": {
+      "userId": "user_dev_01",
+      "balanceCredits": 446,
+      "lifetimePurchased": 600,
+      "lifetimeSpent": 154,
+      "updatedAt": "2026-11-08T13:16:52.024Z"
+    }
+  },
+  "transactions": [
+    {
+      "id": "tx_44rej5h",
+      "userId": "user_dev_01",
+      "amount": -1,
+      "type": "session_deduction",
+      "balanceAfter": 446,
+      "description": "AI Answer Generated: \"Can you describe a distributed syst...\"",
+      "referenceId": "sess_demo_01",
+      "createdAt": "2026-11-08T13:16:52.024Z"
+    },
+    {
+      "id": "tx_xhgbd40",
+      "userId": "user_dev_01",
+      "amount": -1,
+      "type": "session_deduction",
+      "balanceAfter": 447,
+      "description": "AI Answer Generated: \"test...\"",
+      "referenceId": "sess_demo_01",
+      "createdAt": "2026-11-08T13:14:52.043Z"
+    },
+    {
+      "id": "tx_vfafd2r",
+      "userId": "user_dev_01",
+      "amount": -1,
+      "type": "session_deduction",
+      "balanceAfter": 448,
+      "description": "AI Answer Generated: \"Can you describe a distributed syst...\"",
+      "referenceId": "sess_demo_01",
+      "createdAt": "2026-11-08T13:14:29.795Z"
+    },
+    {
+      "id": "tx_nst08o4",
+      "userId": "user_dev_01",
+      "amount": -1,
+      "type": "session_deduction",
+      "balanceAfter": 449,
+      "description": "AI Answer Generated: \"Can you describe a challenging dist...\"",
+      "referenceId": "sess_demo_01",
+      "createdAt": "2026-11-08T13:14:04.642Z"
+    },
+    {
+      "id": "tx_init_01",
+      "userId": "user_dev_01",
+      "amount": 500,
+      "type": "purchase",
+      "balanceAfter": 500,
+      "description": "Pro Plan Monthly Credit Pack (500 credits)",
+      "createdAt": "2026-10-15T09:05:00Z"
+    },
+    {
+      "id": "tx_init_02",
+      "userId": "user_dev_01",
+      "amount": -45,
+      "type": "session_deduction",
+      "balanceAfter": 455,
+      "description": "GCP Staff Engineer Mock Session (45 mins)",
+      "referenceId": "sess_demo_01",
+      "createdAt": "2026-11-06T15:45:00Z"
+    }
+  ],
+  "subscriptions": {
+    "user_dev_01": {
+      "id": "sub_pro_101",
+      "userId": "user_dev_01",
+      "planTier": "pro",
+      "status": "active",
+      "currentPeriodEnd": "2026-12-15T00:00:00Z",
+      "cancelAtPeriodEnd": false
+    }
+  },
+  "resumes": [
+    {
+      "id": "res_primary_01",
+      "userId": "user_dev_01",
+      "fileName": "Alex_Rivers_Staff_Software_Engineer.pdf",
+      "fileSizeBytes": 245000,
+      "fileType": "application/pdf",
+      "extractedText": "Alex Rivers - Staff Software Engineer\nSummary: Results-oriented software architect with 8+ years experience scaling high-throughput distributed systems and cloud platforms.\nTechnical Skills: TypeScript, Go, Python, React, Distributed Systems, Kubernetes, Kafka, Redis, PostgreSQL, AWS, Microservices.\nExperience:\n- Staff Software Engineer at Stripe (2022 - Present): Led redesign of real-time payout processing pipeline, reducing latency by 42% for $12B annual volume. Architected idempotent transaction workflows handling 85,000 requests/sec.\n- Senior Backend Engineer at Airbnb (2019 - 2022): Designed and deployed resilient booking state machine. Reduced booking failure rate by 3.8% across millions of global reservations.\n- Software Engineer at Datadog (2017 - 2019): Built metrics aggregation collectors and time-series visualization pipelines in Go and React.\nEducation:\n- B.S. in Computer Science, University of California, Berkeley (2017)",
+      "parsedProfile": {
+        "name": "Alex Rivers",
+        "headline": "Staff Software Engineer & Distributed Systems Architect",
+        "summary": "Results-oriented software architect with 8+ years experience scaling high-throughput distributed systems.",
+        "skills": [
+          "Distributed Systems",
+          "TypeScript",
+          "Go",
+          "Python",
+          "React",
+          "Kafka",
+          "PostgreSQL",
+          "Kubernetes",
+          "AWS",
+          "Redis",
+          "High Throughput Architecture"
+        ],
+        "experience": [
+          {
+            "role": "Staff Software Engineer",
+            "company": "Stripe",
+            "duration": "2022 - Present",
+            "highlights": [
+              "Led redesign of real-time payout processing pipeline, reducing latency by 42% for $12B volume.",
+              "Architected idempotent transaction workflows processing 85,000 requests/second with 99.999% uptime."
+            ]
+          },
+          {
+            "role": "Senior Backend Engineer",
+            "company": "Airbnb",
+            "duration": "2019 - 2022",
+            "highlights": [
+              "Engineered resilient booking state machine, reducing failure rate by 3.8% across global reservation traffic.",
+              "Mentored 6 junior/mid engineers and established company-wide distributed tracing guidelines."
+            ]
+          }
+        ],
+        "education": [
+          {
+            "degree": "B.S. in Computer Science",
+            "institution": "UC Berkeley",
+            "year": "2017"
+          }
+        ]
+      },
+      "isPrimary": true,
+      "createdAt": "2026-10-18T10:30:00Z"
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc_google_prep",
+      "userId": "user_dev_01",
+      "title": "Google System Design & Leadership Principles Prep",
+      "category": "company_research",
+      "fileSizeBytes": 84000,
+      "content": "Google Technical Leadership & Engineering Culture:\n- Focus on Googleyness: Intellectual humility, thriving on ambiguity, proactive bias for action, and doing what's right for the user.\n- System Design Focus: Horizontal scalability, fault isolation, graceful degradation under network partition, CAP theorem tradeoffs.\n- Key Accomplishment to Highlight: At Stripe, when downstream banking partner experienced 20% timeout spikes, devised circuit breaker with exponential backoff and jitter that prevented cascading failures.",
+      "chunkCount": 3,
+      "createdAt": "2026-10-20T14:15:00Z"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "sess_demo_01",
+      "userId": "user_dev_01",
+      "targetRole": "Staff Software Engineer",
+      "targetCompany": "Google Cloud Platform",
+      "resumeId": "res_primary_01",
+      "resumeName": "Alex_Rivers_Staff_Software_Engineer.pdf",
+      "status": "completed",
+      "startedAt": "2026-11-06T15:00:00Z",
+      "endedAt": "2026-11-06T15:45:00Z",
+      "totalDurationSeconds": 2700,
+      "creditsDeducted": 45,
+      "questionsCount": 4,
+      "overallScore": 94
+    }
+  ],
+  "transcripts": {
+    "sess_demo_01": [
+      {
+        "id": "tr_01",
+        "sessionId": "sess_demo_01",
+        "speaker": "interviewer",
+        "text": "Hello Alex, thanks for joining us today. To start off, could you tell us about a time you designed a high-throughput distributed system under severe latency constraints?",
+        "isQuestion": true,
+        "confidence": 0.98,
+        "category": "technical",
+        "timestamp": "15:02:10"
+      },
+      {
+        "id": "tr_02",
+        "sessionId": "sess_demo_01",
+        "speaker": "candidate",
+        "text": "Certainly! At Stripe, I led the architectural overhaul of our real-time payout processing pipeline, where we needed sub-50ms latency across 85,000 requests per second.",
+        "isQuestion": false,
+        "confidence": 0.95,
+        "timestamp": "15:03:00"
+      }
+    ]
+  },
+  "answers": {
+    "sess_demo_01": [
+      {
+        "id": "ans_8jpjexa",
+        "sessionId": "sess_demo_01",
+        "questionText": "Can you describe a distributed systems incident you resolved?",
+        "category": "technical",
+        "answerText": "When approaching this at Stripe, I focused on architectural isolation and strict observability. In our real-time payout pipeline handling 85,000 requests per second, we encountered sudden downstream latency spikes. I spearheaded the migration to an event-driven Kafka architecture with partitioned idempotency keys and in-memory Redis lock checks. This cut p99 latency by 42% and guaranteed exactly-once processing with zero duplicate transactions across $12B in volume.",
+        "answerStyle": "star",
+        "starBreakdown": {
+          "situation": "At Stripe, our core payout pipeline faced latency spikes up to 450ms during peak merchant settlement windows.",
+          "task": "I was tasked with redesigning the ingestion and execution pipeline to achieve sub-50ms p99 latency while preserving strict financial idempotency.",
+          "action": "Architected an event-driven stream using Kafka partitioned by merchant ID, backed by Redis for in-memory ledger lock verification and asynchronous database flush.",
+          "result": "Reduced p99 latency by 42%, achieved 85,000 req/sec sustained throughput, and supported $12B in processed transactions without a single duplicate payout."
+        },
+        "groundingSources": [
+          "Resume: Alex_Rivers_Staff_Software_Engineer.pdf (Staff Software Engineer at Stripe)"
+        ],
+        "confidenceScore": 0.96,
+        "saved": false,
+        "createdAt": "2026-11-08T13:17:00.029Z"
+      },
+      {
+        "id": "ans_01",
+        "sessionId": "sess_demo_01",
+        "questionText": "Could you tell us about a time you designed a high-throughput distributed system under severe latency constraints?",
+        "category": "technical",
+        "answerText": "Highlight your Stripe payout pipeline overhaul. Break down: Situation (Legacy batch payout pipeline bottlenecking at 85k req/s), Task (Reduce latency under 50ms while maintaining strict exactly-once payment guarantees), Action (Migrated from synchronous relational writes to an event-driven architecture using Kafka, Redis caching layer with write-behind queues, and partitioned idempotency keys), Result (Cut p99 latency by 42% and supported $12B annual volume with zero duplicate transactions).",
+        "answerStyle": "star",
+        "starBreakdown": {
+          "situation": "At Stripe, our core payout pipeline faced latency spikes up to 450ms during peak merchant settlement windows.",
+          "task": "I was tasked with redesigning the ingestion and execution pipeline to achieve sub-50ms p99 latency without compromising strict financial idempotency.",
+          "action": "Architected an event-driven stream using Kafka partitioned by merchant ID, backed by Redis for in-memory ledger lock verification and asynchronous database flush.",
+          "result": "Reduced p99 latency by 42%, achieved 85,000 req/sec sustained throughput, and supported $12B in processed transactions without a single duplicate payout."
+        },
+        "groundingSources": [
+          "Resume: Stripe - Staff Software Engineer",
+          "Knowledge: High Throughput Architecture"
+        ],
+        "confidenceScore": 0.96,
+        "saved": true,
+        "createdAt": "2026-11-06T15:02:25Z"
+      }
+    ]
+  },
+  "notes": {
+    "sess_demo_01": {
+      "id": "note_400ryvi",
+      "sessionId": "sess_demo_01",
+      "userId": "user_dev_01",
+      "executiveSummary": "Solid interview round for Staff Software Engineer at Google Cloud Platform. The candidate demonstrated strong architectural maturity and quantitative impact when discussing distributed systems throughput and resiliency.",
+      "keyTopicsDiscussed": [
+        "Real-Time Payout Latency",
+        "Kafka Stream Partitioning",
+        "Circuit Breakers & Exponential Backoff",
+        "STAR Behavioral Alignment"
+      ],
+      "actionItems": [
+        "Review cross-region replication tradeoffs under network partitions",
+        "Send personalized thank-you follow-up email referencing the caching pipeline discussion"
+      ],
+      "candidateStrengths": [
+        "Structured answers adhering strictly to the STAR methodology",
+        "Directly cited business impact metrics (42% latency cut, $12B processed volume)",
+        "Clear problem deconstruction without hesitation"
+      ],
+      "areasForImprovement": [
+        "Address database shard failover protocols in deeper detail during system design rounds"
+      ],
+      "thankYouEmailDraft": "Hi Google Cloud Platform Hiring Team,\n\nThank you for the insightful conversation today regarding the Staff Software Engineer role. I especially enjoyed our discussion regarding distributed stream partitioning and idempotent transaction processing. I remain very enthusiastic about contributing to your engineering culture and look forward to the next steps!\n\nBest regards,\nAlex Rivers",
+      "createdAt": "2026-11-08T13:17:28.758Z"
+    }
+  },
+  "adminSettings": {
+    "activeAiProvider": "google_gemini",
+    "defaultModel": "gemini-3.8-flash",
+    "costPerCreditUsd": 0.1,
+    "creditsPerMinute": 1,
+    "maintenanceMode": false,
+    "maxSessionsPerUser": 10,
+    "updatedAt": "2026-11-08T13:13:55.480Z"
+  },
+  "auditLogs": [
+    {
+      "id": "aud_01",
+      "adminUserId": "user_dev_01",
+      "adminEmail": "thegreatsinx@gmail.com",
+      "action": "SYSTEM_BOOTSTRAP",
+      "details": "AskMeAi platform initialized with verified security rules and credit wallets.",
+      "ipAddress": "127.0.0.1",
+      "timestamp": "2026-10-15T09:00:00Z"
+    }
+  ],
+  "supportTickets": []
+}

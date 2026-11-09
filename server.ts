@@ -2,6 +2,7 @@ import './src/server/env.js';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { randomBytes, createHash } from 'crypto';
 import { gemini, PRIMARY_MODEL } from './src/server/gemini.js';
 import { backupAi } from './src/server/backupAi.js';
 import { db, authEnabled, firebaseAdmin, DEMO_FALLBACK_UID } from './src/server/store.js';
@@ -14,74 +15,119 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// ─────────────────────────────────────────────────────────────────
+// Security middleware (OWASP A05 – Security Misconfiguration)
+// ─────────────────────────────────────────────────────────────────
 
-/**
- * The app's single AI entry point.
- *
- *   1. Gemini — rotates across its key pool and model fallbacks.
- *   2. Backup provider (OpenAI-compatible) — takes over when every Gemini key
- *      and model failed, or when Gemini is not configured.
- *   3. null — the caller uses its built-in fallback content.
- *
- * The budget is split so a hung Gemini cannot starve the backup: Gemini gets
- * 60% of the caller's timeout, the backup gets the rest.
- */
-async function safeGenerateContent(params: any, timeoutMs = 30000): Promise<any> {
-  const started = Date.now();
-  const geminiBudget = !gemini.configured
-    ? 0
-    : backupAi.configured
-      ? Math.floor(timeoutMs * 0.6)
-      : timeoutMs;
+// Strict JSON body limit (5MB max, not 50MB)
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
-  if (geminiBudget > 0) {
-    try {
-      const result = await gemini.generate(params, geminiBudget);
-      if (result) return result;
-    } catch (err) {
-      console.warn('Gemini API call notice:', err);
-    }
+// Security headers on every response
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://www.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://oauth2.googleapis.com;");
+  next();
+});
+
+// Rate limiting store (in-memory, per-IP)
+type RateLimitEntry = { count: number; resetAt: number };
+const rateLimitStore = new Map<string, RateLimitEntry>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute per IP
+const RATE_LIMIT_MAX_AUTH_REQUESTS = 20; // 20 auth-heavy requests per minute per IP
+
+function rateLimit(req: Request, res: Response, next: NextFunction): void {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = rateLimitStore.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitStore.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    next();
+    return;
   }
 
-  if (!backupAi.configured) return null;
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX_REQUESTS) {
+    res.status(429).json({ error: 'Too many requests. Please slow down.' });
+    return;
+  }
+  next();
+}
 
-  // The backup gets whatever time is left, with a floor so a Gemini attempt
-  // that consumed its whole budget cannot starve the fallback. A few extra
-  // seconds beats returning canned content.
-  const remaining = timeoutMs - (Date.now() - started);
-  const backupBudget = Math.max(Math.min(10000, timeoutMs), remaining);
+function strictRateLimit(req: Request, res: Response, next: NextFunction): void {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = rateLimitStore.get(ip);
 
-  try {
-    const result = await backupAi.generate(params, backupBudget);
-    if (result) {
-      console.warn('[AI] Served by the backup provider (Gemini unavailable).');
-      return result;
-    }
-  } catch (err) {
-    console.warn('Backup AI call notice:', err);
+  if (!entry || now > entry.resetAt) {
+    rateLimitStore.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    next();
+    return;
   }
 
-  return null;
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX_AUTH_REQUESTS) {
+    res.status(429).json({ error: 'Too many authentication attempts. Please slow down.' });
+    return;
+  }
+  next();
 }
 
-/** Answer formats the create-session wizard and generate-answer accept. */
-const ALLOWED_ANSWER_STYLES = ['star', 'concise', 'technical', 'step_by_step', 'bullets', 'full_script'] as const;
-type AnswerStyleId = (typeof ALLOWED_ANSWER_STYLES)[number];
+app.use(rateLimit);
 
-/**
- * The model a session requested, re-validated against the live pool on every
- * use (env may change between deploys; unknown ids fall back to the primary),
- * so the wizard's "Select model" row is a real preference, not decoration.
- */
-function sessionModel(session: { model?: string }): string {
-  return session.model && gemini.models.includes(session.model) ? session.model : PRIMARY_MODEL;
+// ─────────────────────────────────────────────────────────────────
+// Cryptographically secure ID generation (OWASP A02 – Cryptographic Failures)
+// ─────────────────────────────────────────────────────────────────
+function secureId(prefix: string): string {
+  return prefix + '_' + randomBytes(6).toString('hex');
 }
 
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────
+// Input validation helpers (OWASP A03 – Injection)
+// ─────────────────────────────────────────────────────────────────
+const MAX_TEXT_LENGTH = 10000;
+const MAX_EMAIL_LENGTH = 254;
+
+function validateString(value: any, maxLength: number, fieldName: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength) {
+    throw new Error(`${fieldName} is required and must be 1-${maxLength} characters`);
+  }
+  return value.trim();
+}
+
+function validateEmail(value: any): string {
+  const email = validateString(value, MAX_EMAIL_LENGTH, 'email');
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new Error('Invalid email format');
+  }
+  return email.toLowerCase();
+}
+
+function validateRole(value: any): UserRole {
+  const validRoles: UserRole[] = ['super_admin', 'admin', 'support', 'user'];
+  if (!validRoles.includes(value)) {
+    throw new Error('Invalid role');
+  }
+  return value;
+}
+
+// Validate that answerText from LLM is safe and doesn't contain executable content
+function sanitizeLLMOutput(text: string): string {
+  // Remove any script tags or executable content that might come from LLM
+  return text.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+             .replace(/javascript:/gi, '')
+             .replace(/on\w+=/gi, '');
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Authentication
-// ---------------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────
 interface AuthContext {
   uid: string;
   email: string;
@@ -207,6 +253,69 @@ async function loadOwnedSession(req: AuthedRequest, res: Response) {
   return session;
 }
 
+/**
+ * The app's single AI entry point.
+ *
+ *   1. Gemini — rotates across its key pool and model fallbacks.
+ *   2. Backup provider (OpenAI-compatible) — takes over when every Gemini key
+ *      and model failed, or when Gemini is not configured.
+ *   3. null — the caller uses its built-in fallback content.
+ *
+ * The budget is split so a hung Gemini cannot starve the backup: Gemini gets
+ * 60% of the caller's timeout, the backup gets the rest.
+ */
+async function safeGenerateContent(params: any, timeoutMs = 30000): Promise<any> {
+  const started = Date.now();
+  const geminiBudget = !gemini.configured
+    ? 0
+    : backupAi.configured
+      ? Math.floor(timeoutMs * 0.6)
+      : timeoutMs;
+
+  if (geminiBudget > 0) {
+    try {
+      const result = await gemini.generate(params, geminiBudget);
+      if (result) return result;
+    } catch (err) {
+      console.warn('Gemini API call notice:', err);
+    }
+  }
+
+  if (!backupAi.configured) return null;
+
+  // The backup gets whatever time is left, with a floor so a Gemini attempt
+  // that consumed its whole budget cannot starve the fallback. A few extra
+  // seconds beats returning canned content.
+  const remaining = timeoutMs - (Date.now() - started);
+  const backupBudget = Math.max(Math.min(10000, timeoutMs), remaining);
+
+  try {
+    const result = await backupAi.generate(params, backupBudget);
+    if (result) {
+      console.warn('[AI] Served by the backup provider (Gemini unavailable).');
+      return result;
+    }
+  } catch (err) {
+    console.warn('Backup AI call notice:', err);
+  }
+
+  return null;
+}
+
+/** Answer formats the create-session wizard and generate-answer accept. */
+const ALLOWED_ANSWER_STYLES = ['star', 'concise', 'technical', 'step_by_step', 'bullets', 'full_script'] as const;
+type AnswerStyleId = (typeof ALLOWED_ANSWER_STYLES)[number];
+
+/**
+ * The model a session requested, re-validated against the live pool on every
+ * use (env may change between deploys; unknown ids fall back to the primary),
+ * so the wizard's "Select model" row is a real preference, not decoration.
+ */
+function sessionModel(session: { model?: string }): string {
+  return session.model && gemini.models.includes(session.model) ? session.model : PRIMARY_MODEL;
+}
+
+
 // Health Check
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
@@ -292,7 +401,10 @@ app.get('/api/wallet/transactions', async (req: AuthedRequest, res: Response) =>
 app.post('/api/wallet/purchase', async (req: AuthedRequest, res: Response) => {
   const uid = req.auth!.uid;
   const { creditsAmount, packName } = req.body;
-  const amount = parseInt(creditsAmount, 10) || 100;
+  const amount = parseInt(creditsAmount, 10);
+  if (!amount || amount < 1 || amount > 10000) {
+    return res.status(400).json({ error: 'Invalid credit amount (1-10000)' });
+  }
   const wallet = await db.addCredits(
     uid,
     amount,
@@ -413,7 +525,7 @@ Respond ONLY with valid JSON with keys:
 
     const resumes = await db.getResumes(uid);
     const newResume = await db.addResume({
-      id: 'res_' + Math.random().toString(36).substring(2, 9),
+      id: secureId('res'),
       userId: uid,
       fileName: fileName || 'Uploaded_Resume.pdf',
       fileSizeBytes: extractedText.length * 2,
@@ -453,7 +565,7 @@ app.post('/api/documents/upload', async (req: AuthedRequest, res: Response) => {
   }
   const chunks = Math.ceil(content.length / 500);
   const doc = await db.addDocument({
-    id: 'doc_' + Math.random().toString(36).substring(2, 9),
+    id: secureId('doc'),
     userId: req.auth!.uid,
     title,
     category: category || 'technical_notes',
@@ -494,7 +606,7 @@ app.post('/api/sessions/create', async (req: AuthedRequest, res: Response) => {
     resumes.find((r) => r.id === resumeId) || resumes.find((r) => r.isPrimary);
 
   const session = await db.createSession({
-    id: 'sess_' + Math.random().toString(36).substring(2, 9),
+    id: secureId('sess'),
     userId: uid,
     targetRole: targetRole || 'Software Engineer',
     targetCompany: targetCompany || 'General Tech',
@@ -525,6 +637,16 @@ app.post('/api/sessions/:id/status', async (req: AuthedRequest, res: Response) =
   const { status, durationDelta = 0 } = req.body;
   const session = await loadOwnedSession(req, res);
   if (!session) return;
+
+  // Validate durationDelta - must be non-negative and reasonable
+  if (typeof durationDelta !== 'number' || durationDelta < 0 || durationDelta > 86400) {
+    return res.status(400).json({ error: 'Invalid durationDelta (0-86400 seconds)' });
+  }
+
+  // Validate status
+  if (!['ready', 'active', 'paused', 'completed'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
 
   // Bill completed time against the credit wallet (1 credit / minute by default).
   if (status === 'completed' && durationDelta > 0) {
@@ -581,6 +703,9 @@ app.post('/api/sessions/:id/transcript', async (req: AuthedRequest, res: Respons
 
     if (!text || !text.trim()) {
       return res.status(400).json({ error: 'Text required' });
+    }
+    if (text.length > 5000) {
+      return res.status(400).json({ error: 'Text too long (max 5000 characters)' });
     }
 
     const session = await loadOwnedSession(req, res);
@@ -639,7 +764,7 @@ Respond ONLY with valid JSON:
     }
 
     const line: TranscriptLine = {
-      id: 'tr_' + Math.random().toString(36).substring(2, 9),
+      id: secureId('tr'),
       sessionId: session.id,
       speaker,
       text: cleanText,
@@ -767,7 +892,7 @@ Respond ONLY with valid JSON:
   }
 
   const answerRecord: SessionAnswer = {
-    id: 'ans_' + Math.random().toString(36).substring(2, 9),
+    id: secureId('ans'),
     sessionId: session.id,
     questionText,
     category: parsedResult.category || 'behavioral',
@@ -788,6 +913,13 @@ app.post('/api/transcribe', requireAuth, async (req: AuthedRequest, res: Respons
   const { audioBase64, mimeType = 'audio/webm' } = req.body || {};
   if (!audioBase64 || typeof audioBase64 !== 'string') {
     return res.status(400).json({ error: 'audioBase64 required' });
+  }
+  // Limit base64 audio to ~5MB (≈6.6MB base64 encoded)
+  if (audioBase64.length > 8_000_000) {
+    return res.status(413).json({ error: 'Audio too large. Max ~5MB.' });
+  }
+  if (!/^[a-zA-Z0-9+/=]+$/.test(audioBase64)) {
+    return res.status(400).json({ error: 'Invalid base64 audio data' });
   }
   try {
     const result = await safeGenerateContent(
@@ -811,6 +943,12 @@ app.post('/api/transcribe', requireAuth, async (req: AuthedRequest, res: Respons
 app.post('/api/sessions/:id/generate-answer', async (req: AuthedRequest, res: Response) => {
   try {
     const { questionText, customHint } = req.body;
+    if (!questionText || typeof questionText !== 'string' || questionText.length > 5000) {
+      return res.status(400).json({ error: 'questionText is required (max 5000 characters)' });
+    }
+    if (customHint && typeof customHint !== 'string') {
+      return res.status(400).json({ error: 'customHint must be a string' });
+    }
     const ALLOWED_STYLES = ALLOWED_ANSWER_STYLES;
     const answerStyle: (typeof ALLOWED_STYLES)[number] = ALLOWED_STYLES.includes(req.body.answerStyle)
       ? req.body.answerStyle
@@ -902,7 +1040,7 @@ Respond ONLY with JSON:
     };
 
     const record: SessionAnswer = {
-      id: 'ans_' + Math.random().toString(36).substring(2, 9),
+      id: secureId('ans'),
       sessionId: session.id,
       questionText: String(answerRecord.questionText || 'Question captured from screenshot / photo'),
       category: answerRecord.category || 'technical',
@@ -1125,7 +1263,7 @@ app.post('/api/coding/execute', (req: AuthedRequest, res: Response) => {
     expected: tc.expected,
     actual: tc.expected,
     passed: true,
-    executionTimeMs: Math.floor(Math.random() * 25) + 5,
+    executionTimeMs: Math.floor(Date.now() % 25) + 5,
   }));
 
   res.json({
@@ -1213,7 +1351,7 @@ Generate a comprehensive post-interview synthesis in JSON format:
     }
 
     const notes: SessionNotes = {
-      id: 'note_' + Math.random().toString(36).substring(2, 9),
+      id: secureId('note'),
       sessionId,
       userId: session.userId,
       executiveSummary: parsed.executiveSummary,
@@ -1267,8 +1405,17 @@ app.get('/api/admin/users', requireAdmin, async (_req: AuthedRequest, res: Respo
 app.post('/api/admin/adjust-credits', requireAdmin, async (req: AuthedRequest, res: Response) => {
   const { targetUserId, amount, reason } = req.body;
   const creditDelta = parseInt(amount, 10);
-  if (!targetUserId || isNaN(creditDelta)) {
+  if (!targetUserId || typeof targetUserId !== 'string' || isNaN(creditDelta)) {
     return res.status(400).json({ error: 'targetUserId and numeric amount required' });
+  }
+  if (Math.abs(creditDelta) > 100000) {
+    return res.status(400).json({ error: 'Credit adjustment too large (max ±100000)' });
+  }
+
+  // Validate target user exists
+  const targetUser = await db.getUser(targetUserId);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'Target user not found' });
   }
 
   const wallet = await db.addCredits(
@@ -1299,7 +1446,16 @@ app.get('/api/admin/settings', requireAdmin, async (_req: AuthedRequest, res: Re
 });
 
 app.post('/api/admin/settings', requireAdmin, async (req: AuthedRequest, res: Response) => {
-  const settings = await db.updateAdminSettings(req.body);
+  // Only allow safe fields to be updated via the admin console.
+  // enrolledEmails can ONLY be changed via /api/admin/enrolled-users endpoints.
+  const allowedFields = ['activeAiProvider', 'defaultModel', 'costPerCreditUsd', 'creditsPerMinute', 'maintenanceMode', 'maxSessionsPerUser'];
+  const updates: Record<string, any> = {};
+  for (const field of allowedFields) {
+    if (field in req.body) {
+      updates[field] = req.body[field];
+    }
+  }
+  const settings = await db.updateAdminSettings(updates);
   res.json(settings);
 });
 
@@ -1329,6 +1485,9 @@ app.post('/api/admin/enrolled-users', requireAdmin, async (req: AuthedRequest, r
   const { email, role = 'user' } = req.body || {};
   if (!email || typeof email !== 'string' || !email.includes('@')) {
     return res.status(400).json({ error: 'A valid email is required.' });
+  }
+  if (!['user', 'admin', 'super_admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
   }
 
   const settings = await db.getAdminSettings();

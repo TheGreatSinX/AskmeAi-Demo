@@ -319,27 +319,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
-        // ParakeetAI-style language selection: follow the session's language (default en-US).
         recognition.lang = activeSession?.language || 'en-US';
 
-        recognition.onresult = async (event: any) => {
+        // Debounce timer for interim question detection (avoid firing on every partial result)
+        let interimDebounce: ReturnType<typeof setTimeout> | null = null;
+
+        recognition.onresult = (event: any) => {
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             const text = event.results[i][0].transcript.trim();
             if (event.results[i].isFinal) {
-              // Commit the final line to the transcript store.
+              // Commit the final line to the transcript store (fire-and-forget, never block recognition).
               setInterimTranscript('');
               setPendingTranscript(null);
               if (text && activeSession) {
-                try {
-                  const result = await api.submitTranscript(activeSession.id, 'interviewer', text);
-                  // Server may return { line, answer } (combined detection+answer) or just { line }
+                void api.submitTranscript(activeSession.id, 'interviewer', text).then((result: any) => {
                   const res: any = result;
                   const line = res.line || res;
                   const answer = res.answer;
                   setLiveTranscripts((prev) => [...prev, line]);
 
-                  // Question detected with high confidence -> honour the session's
-                  // Auto Answer preference (off = Live Studio offers a manual Answer).
                   if (line.isQuestion && line.confidence > 0.75) {
                     const confidence = Math.round(line.confidence * 100);
                     if (activeSession.autoAnswer === false) {
@@ -347,7 +345,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     } else {
                       const style = activeSession.answerStyle || 'star';
                       showToast(`Detected Interviewer Question (${confidence}% match)`, 'info');
-                      // If the server already generated the answer inline, show it immediately.
                       if (answer) {
                         setLiveAnswers((prev) => [answer, ...prev]);
                         showToast(
@@ -356,7 +353,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                         );
                       } else {
                         markAnswering(line.text);
-                        api
+                        void api
                           .generateAnswer(activeSession.id, line.text, style)
                           .then((ans) => {
                             setLiveAnswers((prev) => [ans, ...prev]);
@@ -373,9 +370,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                       }
                     }
                   }
-                } catch (e) {
-                  console.error('Transcript error:', e);
-                }
+                }).catch((e) => console.error('Transcript error:', e));
               }
             } else {
               // Interim (partial) result — show it live as the user speaks.
@@ -383,31 +378,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setPendingTranscript(text);
 
               // Granola-style: detect questions from interim text and start
-              // answer generation early, before the speaker finishes.
+              // answer generation early, debounced so we don't flood the server.
+              if (interimDebounce) clearTimeout(interimDebounce);
               if (
                 activeSession &&
                 activeSession.autoAnswer !== false &&
                 text.length > 15 &&
                 /[\?]$|^(what|why|how|when|where|who|could|can|would|tell me|describe|explain|walk me through)\b/i.test(text)
               ) {
-                const alreadyAnswered = liveAnswers.some((a) => a.questionText === text);
-                const alreadyAsking = answeringQuestions.includes(text);
-                if (!alreadyAnswered && !alreadyAsking) {
-                  markAnswering(text);
-                  const style = activeSession.answerStyle || 'star';
-                  api
-                    .generateAnswer(activeSession.id, text, style)
-                    .then((ans) => {
-                      // Only commit if the final transcript matches closely enough.
-                      setLiveAnswers((prev) => [ans, ...prev]);
-                      unmarkAnswering(text);
-                      showToast('Answer formulated (live)', 'success');
-                    })
-                    .catch((err) => {
-                      unmarkAnswering(text);
-                      console.error('Live answer error:', err);
-                    });
-                }
+                interimDebounce = setTimeout(() => {
+                  const alreadyAnswered = liveAnswers.some((a) => a.questionText === text);
+                  const alreadyAsking = answeringQuestions.includes(text);
+                  if (!alreadyAnswered && !alreadyAsking) {
+                    markAnswering(text);
+                    const style = activeSession.answerStyle || 'star';
+                    void api
+                      .generateAnswer(activeSession.id, text, style)
+                      .then((ans) => {
+                        setLiveAnswers((prev) => [ans, ...prev]);
+                        unmarkAnswering(text);
+                        showToast('Answer formulated (live)', 'success');
+                      })
+                      .catch((err) => {
+                        unmarkAnswering(text);
+                        console.error('Live answer error:', err);
+                      });
+                  }
+                }, 800);
               }
             }
           }
@@ -420,11 +417,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
 
         recognition.onend = () => {
-          // Keep active if user is still in listening mode
+          // Keep active if user is still in listening mode — restart immediately.
           if (audioState.isListening) {
             try {
               recognition.start();
-            } catch (_) {}
+            } catch (_) {
+              // If restart fails, schedule a retry after a short delay.
+              setTimeout(() => {
+                if (audioState.isListening) {
+                  try {
+                    recognition.start();
+                  } catch (__) {}
+                }
+              }, 1000);
+            }
           }
         };
 

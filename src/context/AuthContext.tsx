@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
-  signInWithPopup,
+  signInWithRedirect,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   GoogleAuthProvider,
+  getRedirectResult,
   type User as FirebaseUser,
 } from 'firebase/auth';
 import { auth, authEnabled } from '../lib/firebase';
@@ -13,7 +14,7 @@ import { isDemoMode, looksLikeSpaShell, onDemoModeChange, setDemoMode } from '..
 interface AuthContextType {
   /** VITE_FIREBASE_* configuration present in the browser bundle. */
   authEnabled: boolean;
-  /** True while the initial Firebase session is being resolved. */
+  /** True while the initial session is being resolved. */
   initializing: boolean;
   firebaseUser: FirebaseUser | null;
   /** Misconfiguration detected at runtime (e.g. server requires auth we can't perform). */
@@ -28,7 +29,7 @@ interface AuthContextType {
   enterDemo: () => void;
   /** True when the app may render its main shell (signed in, or running in demo mode). */
   ready: boolean;
-  /** The only sign-in path: Google via Firebase popup. */
+  /** The only sign-in path: Google via Firebase redirect. */
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -97,6 +98,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
+    // Handle redirect result from Google sign-in (signInWithRedirect)
+    // When Google redirects back to this page, we capture the result here.
+    getRedirectResult(auth)
+      .then((result: any) => {
+        const user = result?.user;
+        if (user) {
+          userRef.current = user;
+          setFirebaseUser(user);
+        }
+        setInitializing(false);
+      })
+      .catch((err: any) => {
+        console.error('Redirect result error:', err);
+        setInitializing(false);
+      });
+
     return () => {
       unsubscribe();
       setTokenProvider(null);
@@ -148,19 +165,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = useCallback(async () => {
     if (!auth) throw new Error('Firebase Auth is not configured.');
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      await signInWithRedirect(auth, new GoogleAuthProvider());
     } catch (err: any) {
-      // Cross-Origin-Opener-Policy may block window.close in the popup,
-      // but sign-in may still have succeeded. Check current user.
-      if (err.code === 'auth/popup-closed-by-user') {
-        throw new Error(friendlyAuthError(err));
-      }
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        userRef.current = currentUser;
-        setFirebaseUser(currentUser);
-        return;
-      }
       throw new Error(friendlyAuthError(err));
     }
   }, []);

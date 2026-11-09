@@ -10,6 +10,66 @@ automatically from GitHub.
 
 ## [Unreleased] — 2026-11-09
 
+### `b0798bd` — ui+auth: "Ink & Signal" design revamp, strictly Google-only sign-in
+
+**Design system — out of "AI slop"** (no gradient buttons/text, no
+glassmorphism/backdrop-blur, no glow shadows, no decorative blur blobs,
+no emoji-icon styling, no rounded-3xl pill cards):
+- `index.html`: font stack rebuilt — **Inter Tight** (UI), **JetBrains
+  Mono** (labels/data/buttons), **Instrument Serif** (display
+  statements); `theme-color #0a0a0b`.
+- `src/index.css`: Tailwind v4 `@theme` **ink palette** — neutral
+  near-black neutrals overriding `slate-*` (no blue cast), plus shared
+  `.micro` (mono uppercase label), `.display` (serif), `.panel` (flat
+  hairline surface, max radius 12px), `.btn`/`.btn-primary`/`.btn-ghost`
+  (mono uppercase buttons; emerald = primary only), neutral scrollbars
+  and one consistent focus-visible outline. Emerald = signal,
+  amber = credits, rose = danger; everything else is ink and gray.
+- Hand-rewritten in the new language: **AuthScreen** (split screen,
+  serif statement panel with numbered hairline rows), **Navbar** (flat
+  bar, mono uppercase tabs with emerald active underline, flat `A/`
+  logo mark), **App** (toasts = flat cards with a left accent bar;
+  flat error/splash screens), **DashboardView** (flat panels, mono
+  KPIs, serif welcome), **LiveStudioView** (flat studio panels,
+  numbered STAR blocks, neutral speaker colors).
+- Mechanical sweep of every secondary view (Coding, Vault, Knowledge,
+  Open Source, Admin, Notes, Mock, Billing, DesktopHUD, Electron guide,
+  Mermaid): `rounded-3xl/2xl` → `xl/lg`, decorative `blur-3xl` blobs
+  deleted, `backdrop-blur-*` and colored/glow `shadow-*` stripped,
+  gradients flattened to solid colors.
+
+**Login page — strictly Google sign-in:**
+- `AuthScreen` reduced to a single **"Continue with Google"** button:
+  email/password fields, sign-up/reset modes, remember-email, and the
+  demo button are gone.
+- `AuthContext`: `signIn`/`signUp`/`sendPasswordReset` removed
+  (+ unused firebase/auth imports); error map trimmed to
+  popup/provider/domain cases; `signInWithGoogle` is the only sign-in
+  path.
+- **Auth activated on every build**: `src/lib/firebase.ts` now carries a
+  committed `PUBLIC_WEB_CONFIG` fallback (Firebase web config = public
+  client identifier by design; `VITE_FIREBASE_*` still overrides), so
+  `authEnabled` is true on the static Cloudflare deploy too — the live
+  site previously shipped with no Firebase config and could never show
+  the login gate.
+- Demo escape hatch moved from a login-screen button to **`?demo=1`**
+  (auto `enterDemo` on mount) so the gate stays Google-only; a quiet
+  mono notice on the login screen mentions it when no API is detected.
+- `.githooks/pre-commit`: narrow, documented exception — the `AIza…`
+  pattern is skipped for `src/lib/firebase.ts` only (public web key);
+  `.env`, Gemini keys, PEM/JWT/service-account scans unchanged.
+
+**Verification:** `tsc --noEmit` 0 errors · `vite build` ok ·
+`npm run test:demo` all assertions pass · built bundle contains
+"Continue with Google" + baked Firebase config and **no**
+email/password/reset strings, no `Plus Jakarta`, ink palette present.
+**Firebase console (user action) still required for live Google
+sign-in**: enable the Google provider and add
+`askmeai-demo.thegreatsinx.workers.dev` to Authorized domains; until
+then use `?demo=1`.
+
+---
+
 ### `891cd28` — feat: ParakeetAI parity — mock interviews, session modes, screenshots, billing
 
 Full parity pass against the observable feature set of ParakeetAI

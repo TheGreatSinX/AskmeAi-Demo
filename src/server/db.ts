@@ -54,9 +54,9 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   creditsPerMinute: 1,
   maintenanceMode: false,
   maxSessionsPerUser: 10,
-  // Invitation-only platform: only enrolled Google accounts may sign in.
-  // Seeded with the platform owner; the admin adds the second enrolled account.
-  enrolledEmails: ['thegreatsinx@gmail.com'],
+  // Invitation-only platform: enrolledEmails starts empty.
+  // The first signer-up becomes super_admin via ensureUser bootstrap logic.
+  enrolledEmails: [],
   updatedAt: new Date().toISOString(),
 };
 
@@ -81,7 +81,7 @@ function stateFromSeed(seed: DemoSeed): DatabaseState {
 
 /** Seed state used when no local database.json exists yet. */
 const INITIAL_STATE: DatabaseState = stateFromSeed(
-  createDemoSeed(DEMO_USER_ID, 'thegreatsinx@gmail.com', 'Platform Owner', {})
+  createDemoSeed(DEMO_USER_ID, 'platform@askmeai.local', 'Platform Owner', {})
 );
 
 export class Database implements DataStore {
@@ -151,11 +151,15 @@ export class Database implements DataStore {
     if (!enrolled.includes(account.email.toLowerCase())) {
       throw new EnrollmentError(account.email);
     }
+    // Bootstrap: if no admin/super_admin exists yet, the first signer-up becomes super_admin.
+    const existingAdmins = this.state.users.filter((u) =>
+      u.role === 'super_admin' || u.role === 'admin'
+    );
     const user: User = {
       ...seed.user,
       photoURL: account.photoURL,
       emailVerified: account.emailVerified ?? false,
-      role: roleForEmail(account.email),
+      role: existingAdmins.length === 0 ? 'super_admin' : roleForEmail(account.email),
     };
     this.state.users.push(user);
     this.state.wallets[account.uid] = seed.wallet;

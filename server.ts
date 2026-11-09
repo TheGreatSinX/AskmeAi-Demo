@@ -110,7 +110,7 @@ function validateEmail(value: any): string {
 }
 
 function validateRole(value: any): UserRole {
-  const validRoles: UserRole[] = ['super_admin', 'admin', 'support', 'user'];
+  const validRoles: UserRole[] = ['admin', 'support', 'user'];
   if (!validRoles.includes(value)) {
     throw new Error('Invalid role');
   }
@@ -166,8 +166,8 @@ async function attachAuth(req: AuthedRequest, res: Response, next: NextFunction)
     // Local demo mode: no Firebase anywhere, use the seeded developer account.
     const user = await db.ensureUser({
       uid: DEMO_FALLBACK_UID,
-      email: 'thegreatsinx@gmail.com',
-      displayName: 'Alex Rivers',
+      email: 'platform@askmeai.local',
+      displayName: 'Platform Owner',
       emailVerified: true,
     });
     req.auth = {
@@ -232,7 +232,7 @@ function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
 
 function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction) {
   const role = req.auth?.role;
-  if (role !== 'super_admin' && role !== 'admin') {
+  if (role !== 'admin') {
     return res.status(403).json({ error: 'Administrator access required.' });
   }
   next();
@@ -246,7 +246,7 @@ async function loadOwnedSession(req: AuthedRequest, res: Response) {
     return null;
   }
   const role = req.auth!.role;
-  if (session.userId !== req.auth!.uid && role !== 'super_admin' && role !== 'admin') {
+  if (session.userId !== req.auth!.uid && role !== 'admin') {
     res.status(403).json({ error: 'You do not have access to this session.' });
     return null;
   }
@@ -1284,7 +1284,7 @@ app.post('/api/notes/generate', async (req: AuthedRequest, res: Response) => {
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
     const role = req.auth!.role;
-    if (session.userId !== req.auth!.uid && role !== 'super_admin' && role !== 'admin') {
+    if (session.userId !== req.auth!.uid && role !== 'admin') {
       return res.status(403).json({ error: 'You do not have access to this session.' });
     }
 
@@ -1486,7 +1486,7 @@ app.post('/api/admin/enrolled-users', requireAdmin, async (req: AuthedRequest, r
   if (!email || typeof email !== 'string' || !email.includes('@')) {
     return res.status(400).json({ error: 'A valid email is required.' });
   }
-  if (!['user', 'admin', 'super_admin'].includes(role)) {
+  if (!['user', 'admin'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
   }
 

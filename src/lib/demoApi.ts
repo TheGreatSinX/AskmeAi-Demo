@@ -64,6 +64,8 @@ function state(): DemoState {
 
   if (!loaded || !loaded.user || !loaded.wallet) {
     const seed = createDemoSeed(DEMO_UID, 'demo@askmeai.local', 'Demo User', {});
+    // Bootstrap: first signer-up becomes super_admin.
+    seed.user.role = 'super_admin';
     loaded = { ...seed, adminSettings: { ...DEFAULT_SETTINGS } };
   }
   if (!loaded.adminSettings) loaded.adminSettings = { ...DEFAULT_SETTINGS };

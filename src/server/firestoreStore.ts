@@ -49,8 +49,9 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   creditsPerMinute: 1,
   maintenanceMode: false,
   maxSessionsPerUser: 10,
-  // Invitation-only platform: only enrolled Google accounts may sign in.
-  enrolledEmails: ['thegreatsinx@gmail.com'],
+  // Invitation-only platform: enrolledEmails starts empty.
+  // The first signer-up becomes super_admin via ensureUser bootstrap logic.
+  enrolledEmails: [],
   updatedAt: new Date().toISOString(),
 };
 
@@ -126,11 +127,16 @@ export class FirestoreStore implements DataStore {
     if (!enrolled.includes(account.email.toLowerCase())) {
       throw new EnrollmentError(account.email);
     }
+    // Bootstrap: if no admin/super_admin exists yet, the first signer-up becomes super_admin.
+    const adminSnap = await this.col(COLLECTIONS.users)
+      .where('role', 'in', ['super_admin', 'admin'])
+      .limit(1)
+      .get();
     const user: User = {
       ...seed.user,
       photoURL: account.photoURL,
       emailVerified: account.emailVerified ?? false,
-      role: roleForEmail(account.email),
+      role: adminSnap.empty ? 'super_admin' : roleForEmail(account.email),
     };
 
     const batch = this.db.batch();

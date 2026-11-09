@@ -142,7 +142,7 @@ export const AdminView: React.FC = () => {
     }
   };
 
-  if (user?.role !== 'super_admin' && user?.role !== 'admin') {
+  if (user?.role !== 'admin') {
     return (
       <div className="py-24 text-center space-y-4 max-w-md mx-auto">
         <Lock className="h-12 w-12 text-rose-500 mx-auto" />
@@ -335,7 +335,7 @@ export const AdminView: React.FC = () => {
                     <span className="font-mono text-[11px] text-slate-300">{eu.email}</span>
                     <span
                       className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
-                        eu.role === 'super_admin' || eu.role === 'admin'
+                        eu.role === 'admin'
                           ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
                           : 'bg-slate-800 text-slate-400 border border-slate-800'
                       }`}

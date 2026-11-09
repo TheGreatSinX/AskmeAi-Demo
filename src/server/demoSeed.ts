@@ -34,11 +34,7 @@ export interface DemoSeed {
   auditLogs: AuditLog[];
 }
 
-/** E-mail addresses that are promoted to super_admin on first provisioning. */
-export const SUPER_ADMIN_EMAILS = ['thegreatsinx@gmail.com', 'demo@askmeai.local'];
-
 export function roleForEmail(email?: string | null): UserRole {
-  if (email && SUPER_ADMIN_EMAILS.includes(email.toLowerCase())) return 'super_admin';
   return 'user';
 }
 

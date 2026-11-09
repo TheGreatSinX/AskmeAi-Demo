@@ -98,10 +98,17 @@ interface AppContextType {
   liveAnswers: SessionAnswer[];
   /** Partial (not-yet-final) speech text — shown live as the user speaks. */
   interimTranscript: string;
+  /** Transcript line currently being composed — shown as "live" text until finalized. */
+  pendingTranscript: string | null;
   addLiveTranscript: (line: TranscriptLine) => void;
   addLiveAnswer: (answer: SessionAnswer) => void;
   setLiveTranscripts: React.Dispatch<React.SetStateAction<TranscriptLine[]>>;
   setLiveAnswers: React.Dispatch<React.SetStateAction<SessionAnswer[]>>;
+  /** Question texts currently being answered — used for per-question "Generating…" state. */
+  answeringQuestions: string[];
+  markAnswering: (questionText: string) => void;
+  unmarkAnswering: (questionText: string) => void;
+  isAnswering: (questionText: string) => boolean;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -138,6 +145,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [liveTranscripts, setLiveTranscripts] = useState<TranscriptLine[]>([]);
   const [liveAnswers, setLiveAnswers] = useState<SessionAnswer[]>([]);
   const [interimTranscript, setInterimTranscript] = useState('');
+  const [pendingTranscript, setPendingTranscript] = useState<string | null>(null);
+  /** Question texts currently being answered (for per-question "Generating…" state). */
+  const [answeringQuestions, setAnsweringQuestions] = useState<string[]>([]);
 
   // Audio Processing State
   const [audioState, setAudioState] = useState<AudioState>({
@@ -167,6 +177,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const dismissToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
+
+  const markAnswering = (questionText: string) => {
+    setAnsweringQuestions((prev) => (prev.includes(questionText) ? prev : [...prev, questionText]));
+  };
+
+  const unmarkAnswering = (questionText: string) => {
+    setAnsweringQuestions((prev) => prev.filter((q) => q !== questionText));
+  };
+
+  const isAnswering = (questionText: string) => answeringQuestions.includes(questionText);
 
   const refreshState = useCallback(async () => {
     try {
@@ -302,8 +322,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             const text = event.results[i][0].transcript.trim();
             if (event.results[i].isFinal) {
-              // Clear the interim line once a final result arrives.
+              // Commit the final line to the transcript store.
               setInterimTranscript('');
+              setPendingTranscript(null);
               if (text && activeSession) {
                 try {
                   const line = await api.submitTranscript(activeSession.id, 'interviewer', text);
@@ -318,16 +339,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     } else {
                       const style = activeSession.answerStyle || 'star';
                       showToast(`Detected Interviewer Question (${confidence}% match)`, 'info');
+                      markAnswering(line.text);
                       api
                         .generateAnswer(activeSession.id, line.text, style)
                         .then((ans) => {
                           setLiveAnswers((prev) => [ans, ...prev]);
+                          unmarkAnswering(line.text);
                           showToast(
                             style === 'star' ? 'New STAR Answer Formulated' : 'New Answer Formulated',
                             'success'
                           );
                         })
-                        .catch((err) => console.error('Auto-answer error:', err));
+                        .catch((err) => {
+                          unmarkAnswering(line.text);
+                          console.error('Auto-answer error:', err);
+                        });
                     }
                   }
                 } catch (e) {
@@ -337,6 +363,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             } else {
               // Interim (partial) result — show it live as the user speaks.
               setInterimTranscript(text);
+              setPendingTranscript(text);
+
+              // Granola-style: detect questions from interim text and start
+              // answer generation early, before the speaker finishes.
+              if (
+                activeSession &&
+                activeSession.autoAnswer !== false &&
+                text.length > 15 &&
+                /[\?]$|^(what|why|how|when|where|who|could|can|would|tell me|describe|explain|walk me through)\b/i.test(text)
+              ) {
+                const alreadyAnswered = liveAnswers.some((a) => a.questionText === text);
+                const alreadyAsking = answeringQuestions.includes(text);
+                if (!alreadyAnswered && !alreadyAsking) {
+                  markAnswering(text);
+                  const style = activeSession.answerStyle || 'star';
+                  api
+                    .generateAnswer(activeSession.id, text, style)
+                    .then((ans) => {
+                      // Only commit if the final transcript matches closely enough.
+                      setLiveAnswers((prev) => [ans, ...prev]);
+                      unmarkAnswering(text);
+                      showToast('Answer formulated (live)', 'success');
+                    })
+                    .catch((err) => {
+                      unmarkAnswering(text);
+                      console.error('Live answer error:', err);
+                    });
+                }
+              }
             }
           }
         };
@@ -563,8 +618,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         liveTranscripts,
         liveAnswers,
         interimTranscript,
+        pendingTranscript,
+        answeringQuestions,
         addLiveTranscript,
         addLiveAnswer,
+        markAnswering,
+        unmarkAnswering,
+        isAnswering,
         setLiveTranscripts,
         setLiveAnswers,
       }}

@@ -33,8 +33,13 @@ export const LiveStudioView: React.FC = () => {
     liveTranscripts,
     liveAnswers,
     interimTranscript,
+    pendingTranscript,
+    answeringQuestions,
     addLiveTranscript,
     addLiveAnswer,
+    markAnswering,
+    unmarkAnswering,
+    isAnswering,
     endSession,
     wallet,
     showToast,
@@ -50,6 +55,9 @@ export const LiveStudioView: React.FC = () => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<SessionAnswer | null>(null);
+
+  // Derive global generating state from per-question tracking.
+  const generating = answeringQuestions.length > 0 || isGenerating;
 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -102,22 +110,22 @@ export const LiveStudioView: React.FC = () => {
     const line = await api.submitTranscript(activeSession.id, 'interviewer', question);
     addLiveTranscript(line);
 
-    setIsGenerating(true);
+    markAnswering(question);
     try {
       const answer = await api.generateAnswer(activeSession.id, question, answerStyle, customHint);
       addLiveAnswer(answer);
       setSelectedAnswer(answer);
+      unmarkAnswering(question);
       showToast('Grounded answer formulated!', 'success');
     } catch (e: any) {
+      unmarkAnswering(question);
       showToast(e.message || 'Answer generation failed', 'error');
-    } finally {
-      setIsGenerating(false);
     }
   };
 
   const handleRegenerate = async () => {
     if (!selectedAnswer || !activeSession) return;
-    setIsGenerating(true);
+    markAnswering(selectedAnswer.questionText);
     try {
       const answer = await api.generateAnswer(
         activeSession.id,
@@ -127,11 +135,11 @@ export const LiveStudioView: React.FC = () => {
       );
       addLiveAnswer(answer);
       setSelectedAnswer(answer);
+      unmarkAnswering(selectedAnswer.questionText);
       showToast('Answer regenerated with updated style!', 'success');
     } catch (e: any) {
+      unmarkAnswering(selectedAnswer.questionText);
       showToast(e.message || 'Regeneration failed', 'error');
-    } finally {
-      setIsGenerating(false);
     }
   };
 
@@ -144,17 +152,17 @@ export const LiveStudioView: React.FC = () => {
 
   /** Manual trigger shown on detected questions — the "Auto Answer off" path. */
   const answerQuestionNow = async (text: string) => {
-    if (!activeSession || isGenerating) return;
-    setIsGenerating(true);
+    if (!activeSession || isAnswering(text)) return;
+    markAnswering(text);
     try {
       const answer = await api.generateAnswer(activeSession.id, text, answerStyle, customHint || undefined);
       addLiveAnswer(answer);
       setSelectedAnswer(answer);
+      unmarkAnswering(text);
       showToast('Answer formulated', 'success');
     } catch (e: any) {
+      unmarkAnswering(text);
       showToast(e.message || 'Answer generation failed', 'error');
-    } finally {
-      setIsGenerating(false);
     }
   };
 
@@ -485,11 +493,13 @@ export const LiveStudioView: React.FC = () => {
                               e.stopPropagation();
                               void answerQuestionNow(t.text);
                             }}
-                            disabled={isGenerating}
+                            disabled={generating || isAnswering(t.text)}
                             title="Generate an answer for this question"
-                            className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+                            className={`rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors hover:bg-emerald-500/20 disabled:opacity-50 ${
+                              isAnswering(t.text) ? 'text-emerald-400 animate-pulse' : 'text-emerald-400'
+                            }`}
                           >
-                            Answer
+                            {isAnswering(t.text) ? 'Generating…' : 'Answer'}
                           </button>
                         )}
                       </span>
@@ -499,10 +509,10 @@ export const LiveStudioView: React.FC = () => {
               ))
             )}
             <div ref={transcriptEndRef} />
-            {interimTranscript && (
-              <div className="flex items-center gap-2 px-3 py-2 text-xs italic text-slate-400">
-                <span className="h-2 w-2 rounded-full bg-slate-600 animate-pulse" />
-                {interimTranscript}
+            {pendingTranscript && (
+              <div className="flex items-center gap-2 px-3 py-2 text-xs italic text-emerald-400/80 border-t border-slate-800">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                {pendingTranscript}
               </div>
             )}
           </div>
@@ -513,7 +523,7 @@ export const LiveStudioView: React.FC = () => {
               <button
                 type="button"
                 onClick={handleScreenCapture}
-                disabled={isGenerating || isCapturing}
+                disabled={generating || isCapturing}
                 title="Capture a screen with the question, get an answer"
                 className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200 disabled:opacity-50"
               >
@@ -523,7 +533,7 @@ export const LiveStudioView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => photoInputRef.current?.click()}
-                disabled={isGenerating}
+                disabled={generating}
                 title="Upload a photo of the question"
                 className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200 disabled:opacity-50"
               >
@@ -552,7 +562,7 @@ export const LiveStudioView: React.FC = () => {
               />
               <button
                 type="submit"
-                disabled={isGenerating || !manualInput.trim()}
+                disabled={generating || !manualInput.trim()}
                 aria-label="Ask question"
                 className="rounded-lg bg-emerald-400 p-2.5 text-[#052e1c] transition-colors hover:bg-emerald-300 disabled:opacity-40"
               >
@@ -595,7 +605,7 @@ export const LiveStudioView: React.FC = () => {
 
           {/* Active / selected answer display */}
           <div className="flex-1 space-y-4 overflow-y-auto pr-1">
-            {isGenerating ? (
+            {generating ? (
               <div className="flex h-full flex-col items-center justify-center space-y-3 text-center">
                 <div className="h-8 w-8 animate-spin rounded-full border border-emerald-400 border-t-transparent"></div>
                 <div className="space-y-1">
@@ -707,7 +717,7 @@ export const LiveStudioView: React.FC = () => {
             {selectedAnswer && (
               <button
                 onClick={handleRegenerate}
-                disabled={isGenerating}
+                disabled={generating}
                 className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200 disabled:opacity-50"
               >
                 Re-synthesize

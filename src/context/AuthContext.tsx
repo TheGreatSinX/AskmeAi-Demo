@@ -3,6 +3,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  sendPasswordResetEmail,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   updateProfile,
@@ -26,6 +27,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  /** Sends a password-reset e-mail; throws a friendly message on failure. */
+  sendPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -40,14 +43,25 @@ function friendlyAuthError(err: any): string {
     'auth/email-already-in-use': 'An account with that email already exists.',
     'auth/weak-password': 'Password must be at least 6 characters.',
     'auth/invalid-email': 'Please enter a valid email address.',
+    'auth/missing-email': 'Please enter your email address.',
     'auth/popup-closed-by-user': 'Sign-in was cancelled before completion.',
     'auth/popup-blocked': 'Your browser blocked the sign-in popup. Allow popups and retry.',
     'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
     'auth/network-request-failed': 'Network error. Check your connection and retry.',
     'auth/configuration-not-found': 'Google sign-in is not enabled for this Firebase project.',
+    'auth/operation-not-allowed':
+      'That sign-in method is not enabled for this Firebase project. Enable it under Authentication → Sign-in method.',
+    'auth/unauthorized-domain':
+      'This domain is not authorized for Firebase sign-in. Add it under Authentication → Settings → Authorized domains.',
+    'auth/invalid-api-key': 'Firebase configuration error: the API key is missing or invalid.',
+    'auth/api-key-not-valid-but-by-project': 'Firebase configuration error: the API key is not valid for this project.',
+    'auth/app-not-authorized': 'This app is not authorized to use Firebase Authentication.',
+    'auth/user-disabled': 'This account has been disabled. Contact an administrator.',
+    'auth/requires-recent-login': 'For security, please sign in again before continuing.',
+    'auth/internal-error': 'Firebase returned an unexpected error. Please try again.',
   };
   if (map[code]) return map[code];
-  if (code.startsWith('auth/')) return err.message;
+  if (code.startsWith('auth/')) return err.message.replace(/^Firebase:\s*/i, '').replace(/\s*\(auth\/[^)]+\)\s*$/, '');
   return err?.message || 'Authentication failed.';
 }
 
@@ -142,6 +156,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const sendPasswordReset = useCallback(async (email: string) => {
+    if (!auth) throw new Error('Firebase Auth is not configured.');
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+    } catch (err: any) {
+      throw new Error(friendlyAuthError(err));
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     if (auth) await firebaseSignOut(auth);
   }, []);
@@ -156,6 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signIn,
     signUp,
     signInWithGoogle,
+    sendPasswordReset,
     signOut,
   };
 

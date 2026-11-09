@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test:demo": "tsx scripts/smoke-demo-api.mts"
+    "test:demo": "tsx scripts/smoke-demo-api.mts",
+    "test:notes": "tsx scripts/test-notes-summary.mts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

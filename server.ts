@@ -1,12 +1,11 @@
-import express, { Request, Response } from 'express';
-import dotenv from 'dotenv';
+import './src/server/env.js';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from '@google/genai';
-import { db } from './src/server/db.js';
-import { TranscriptLine, SessionAnswer, SessionNotes } from './src/types/index.js';
-
-dotenv.config();
+import { gemini, PRIMARY_MODEL } from './src/server/gemini.js';
+import { backupAi } from './src/server/backupAi.js';
+import { db, authEnabled, firebaseAdmin, DEMO_FALLBACK_UID } from './src/server/store.js';
+import { TranscriptLine, SessionAnswer, SessionNotes, UserRole } from './src/types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,56 +16,200 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Initialized Gemini AI instance (Server-side only)
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
+/**
+ * The app's single AI entry point.
+ *
+ *   1. Gemini — rotates across its key pool and model fallbacks.
+ *   2. Backup provider (OpenAI-compatible) — takes over when every Gemini key
+ *      and model failed, or when Gemini is not configured.
+ *   3. null — the caller uses its built-in fallback content.
+ *
+ * The budget is split so a hung Gemini cannot starve the backup: Gemini gets
+ * 60% of the caller's timeout, the backup gets the rest.
+ */
+async function safeGenerateContent(params: any, timeoutMs = 30000): Promise<any> {
+  const started = Date.now();
+  const geminiBudget = !gemini.configured
+    ? 0
+    : backupAi.configured
+      ? Math.floor(timeoutMs * 0.6)
+      : timeoutMs;
 
-// Safe Gemini wrapper with timeout and fallback support
-async function safeGenerateContent(params: any, timeoutMs = 8000): Promise<any> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key || key === 'MY_GEMINI_API_KEY' || key.trim() === '') {
-    return null;
+  if (geminiBudget > 0) {
+    try {
+      const result = await gemini.generate(params, geminiBudget);
+      if (result) return result;
+    } catch (err) {
+      console.warn('Gemini API call notice:', err);
+    }
   }
+
+  if (!backupAi.configured) return null;
+
+  // The backup gets whatever time is left, with a floor so a Gemini attempt
+  // that consumed its whole budget cannot starve the fallback. A few extra
+  // seconds beats returning canned content.
+  const remaining = timeoutMs - (Date.now() - started);
+  const backupBudget = Math.max(Math.min(10000, timeoutMs), remaining);
+
   try {
-    const callPromise = ai.models.generateContent(params);
-    const timeoutPromise = new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error('AI call timeout')), timeoutMs)
-    );
-    return await Promise.race([callPromise, timeoutPromise]);
+    const result = await backupAi.generate(params, backupBudget);
+    if (result) {
+      console.warn('[AI] Served by the backup provider (Gemini unavailable).');
+      return result;
+    }
   } catch (err) {
-    console.warn('Gemini API call notice:', err);
-    return null;
+    console.warn('Backup AI call notice:', err);
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Authentication
+// ---------------------------------------------------------------------------
+interface AuthContext {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  emailVerified: boolean;
+  role: UserRole;
+}
+
+interface AuthedRequest extends Request {
+  auth?: AuthContext;
+}
+
+/** Whether the browser bundle was built with Firebase web configuration. */
+const clientAuthConfigured = Boolean(
+  process.env.VITE_FIREBASE_API_KEY && process.env.VITE_FIREBASE_PROJECT_ID
+);
+
+/**
+ * Verifies the Firebase ID token sent as `Authorization: Bearer <token>` and
+ * provisions the account document on first sign-in.
+ *
+ * When no Firebase credentials are configured on the server the request falls
+ * back to the local demo account, so the app keeps working offline.
+ */
+async function attachAuth(req: AuthedRequest, res: Response, next: NextFunction) {
+  if (!authEnabled) {
+    if (clientAuthConfigured) {
+      return res.status(503).json({
+        error:
+          'The client is configured for Firebase Auth but this server has no Firebase Admin credentials. ' +
+          'Set FIREBASE_SERVICE_ACCOUNT (or GOOGLE_APPLICATION_CREDENTIALS) and restart.',
+      });
+    }
+
+    // Local demo mode: no Firebase anywhere, use the seeded developer account.
+    const user = await db.ensureUser({
+      uid: DEMO_FALLBACK_UID,
+      email: 'thegreatsinx@gmail.com',
+      displayName: 'Alex Rivers',
+      emailVerified: true,
+    });
+    req.auth = {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+      emailVerified: user.emailVerified,
+      role: user.role,
+    };
+    return next();
+  }
+
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing Firebase ID token.' });
+  }
+
+  try {
+    const decoded = await firebaseAdmin!.auth.verifyIdToken(header.slice(7));
+    const user = await db.ensureUser({
+      uid: decoded.uid,
+      email: decoded.email || '',
+      displayName:
+        decoded.name || (decoded.email ? decoded.email.split('@')[0] : 'Candidate'),
+      photoURL: decoded.picture,
+      emailVerified: decoded.email_verified ?? false,
+    });
+
+    req.auth = {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+      emailVerified: user.emailVerified,
+      role: user.role,
+    };
+    next();
+  } catch (err: any) {
+    console.warn('ID token verification failed:', err?.message || err);
+    res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
   }
 }
 
-// Current mock user ID (in production, populated via auth token verification)
-const DEFAULT_USER_ID = 'user_dev_01';
+function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
+  if (!req.auth) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  next();
+}
+
+function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction) {
+  const role = req.auth?.role;
+  if (role !== 'super_admin' && role !== 'admin') {
+    return res.status(403).json({ error: 'Administrator access required.' });
+  }
+  next();
+}
+
+/** Loads a session and ensures it belongs to the caller (admins may bypass). */
+async function loadOwnedSession(req: AuthedRequest, res: Response) {
+  const session = await db.getSession(req.params.id);
+  if (!session) {
+    res.status(404).json({ error: 'Session not found' });
+    return null;
+  }
+  const role = req.auth!.role;
+  if (session.userId !== req.auth!.uid && role !== 'super_admin' && role !== 'admin') {
+    res.status(403).json({ error: 'You do not have access to this session.' });
+    return null;
+  }
+  return session;
+}
 
 // Health Check
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    aiConfigured: !!process.env.GEMINI_API_KEY,
+    aiConfigured: gemini.configured,
+    backend: db.kind,
+    authRequired: authEnabled,
   });
 });
 
+// Everything below requires an authenticated caller (Firebase ID token, or the
+// local demo account when Firebase is not configured).
+app.use('/api', attachAuth);
+
 // Full state for current user
-app.get('/api/me', (req: Request, res: Response) => {
-  const userId = (req.query.userId as string) || DEFAULT_USER_ID;
-  const user = db.getUser(userId);
-  const devices = db.getDevices(userId);
-  const wallet = db.getWallet(userId);
-  const subscription = db.getSubscription(userId);
-  const resumes = db.getResumes(userId);
-  const documents = db.getDocuments(userId);
-  const sessions = db.getSessions(userId);
+app.get('/api/me', async (req: AuthedRequest, res: Response) => {
+  const uid = req.auth!.uid;
+  const [user, devices, wallet, subscription, resumes, documents, sessions] =
+    await Promise.all([
+      db.getUser(uid),
+      db.getDevices(uid),
+      db.getWallet(uid),
+      db.getSubscription(uid),
+      db.getResumes(uid),
+      db.getDocuments(uid),
+      db.getSessions(uid),
+    ]);
 
   res.json({
     user,
@@ -80,21 +223,22 @@ app.get('/api/me', (req: Request, res: Response) => {
 });
 
 // Device Session Management (1 Desktop + 1 Mobile limit)
-app.post('/api/auth/register-device', (req: Request, res: Response) => {
-  const { userId = DEFAULT_USER_ID, deviceType, deviceName, userAgent } = req.body;
+app.post('/api/auth/register-device', async (req: AuthedRequest, res: Response) => {
+  const uid = req.auth!.uid;
+  const { deviceType, deviceName, userAgent } = req.body;
   const ip = req.ip || '127.0.0.1';
 
-  const result = db.registerDevice(
-    userId,
+  const result = await db.registerDevice(
+    uid,
     deviceType === 'mobile' ? 'mobile' : 'desktop',
     deviceName || (deviceType === 'mobile' ? 'Mobile Browser' : 'Desktop Browser'),
     userAgent || req.headers['user-agent'] || '',
     ip
   );
 
-  db.addAuditLog({
-    adminUserId: userId,
-    adminEmail: db.getUser(userId)?.email || 'user@example.com',
+  await db.addAuditLog({
+    adminUserId: uid,
+    adminEmail: req.auth!.email,
     action: 'DEVICE_REGISTERED',
     details: `Device ${result.device.deviceName} (${result.device.deviceType}) registered. ${result.revokedOldDevice ? `Revoked prior device: ${result.revokedOldDevice.deviceName}` : ''}`,
     ipAddress: ip,
@@ -103,28 +247,27 @@ app.post('/api/auth/register-device', (req: Request, res: Response) => {
   res.json(result);
 });
 
-app.post('/api/auth/revoke-device', (req: Request, res: Response) => {
-  const { deviceId, userId = DEFAULT_USER_ID } = req.body;
-  const success = db.revokeDevice(deviceId, userId);
+app.post('/api/auth/revoke-device', async (req: AuthedRequest, res: Response) => {
+  const { deviceId } = req.body;
+  const success = await db.revokeDevice(deviceId, req.auth!.uid);
   res.json({ success });
 });
 
 // Wallet & Credits
-app.get('/api/wallet', (req: Request, res: Response) => {
-  const userId = (req.query.userId as string) || DEFAULT_USER_ID;
-  res.json(db.getWallet(userId));
+app.get('/api/wallet', async (req: AuthedRequest, res: Response) => {
+  res.json(await db.getWallet(req.auth!.uid));
 });
 
-app.get('/api/wallet/transactions', (req: Request, res: Response) => {
-  const userId = (req.query.userId as string) || DEFAULT_USER_ID;
-  res.json(db.getTransactions(userId));
+app.get('/api/wallet/transactions', async (req: AuthedRequest, res: Response) => {
+  res.json(await db.getTransactions(req.auth!.uid));
 });
 
-app.post('/api/wallet/purchase', (req: Request, res: Response) => {
-  const { userId = DEFAULT_USER_ID, creditsAmount, packName } = req.body;
+app.post('/api/wallet/purchase', async (req: AuthedRequest, res: Response) => {
+  const uid = req.auth!.uid;
+  const { creditsAmount, packName } = req.body;
   const amount = parseInt(creditsAmount, 10) || 100;
-  const wallet = db.addCredits(
-    userId,
+  const wallet = await db.addCredits(
+    uid,
     amount,
     'purchase',
     `Purchased ${packName || `${amount} Credits Pack`}`
@@ -132,50 +275,58 @@ app.post('/api/wallet/purchase', (req: Request, res: Response) => {
   res.json({ success: true, wallet });
 });
 
-app.post('/api/subscriptions/update', (req: Request, res: Response) => {
-  const { userId = DEFAULT_USER_ID, planTier } = req.body;
+app.post('/api/subscriptions/update', async (req: AuthedRequest, res: Response) => {
+  const uid = req.auth!.uid;
+  const { planTier } = req.body;
   if (!['starter', 'pro', 'executive'].includes(planTier)) {
     return res.status(400).json({ error: 'Invalid plan tier' });
   }
-  const subscription = db.updateSubscription(userId, planTier);
-  const wallet = db.getWallet(userId);
+  const subscription = await db.updateSubscription(uid, planTier);
+  const wallet = await db.getWallet(uid);
   res.json({ success: true, subscription, wallet });
 });
 
 // Resumes
-app.get('/api/resumes', (req: Request, res: Response) => {
-  const userId = (req.query.userId as string) || DEFAULT_USER_ID;
-  res.json(db.getResumes(userId));
+app.get('/api/resumes', async (req: AuthedRequest, res: Response) => {
+  res.json(await db.getResumes(req.auth!.uid));
 });
 
-app.post('/api/resumes/upload', async (req: Request, res: Response) => {
+app.post('/api/resumes/upload', async (req: AuthedRequest, res: Response) => {
   try {
-    const { userId = DEFAULT_USER_ID, fileName, fileContentBase64, textContent, fileType = 'text/plain' } = req.body;
+    const uid = req.auth!.uid;
+    const { fileName, fileContentBase64, textContent, fileType = 'text/plain' } = req.body;
 
     let extractedText = textContent || '';
 
     // If base64 file provided (PDF/Image/Document), let Gemini parse and structure it
     if (fileContentBase64 && !extractedText) {
       try {
-        const parseResponse = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: fileType.includes('pdf') ? 'application/pdf' : 'text/plain',
-                  data: fileContentBase64,
+        const parseResponse = await safeGenerateContent(
+          {
+            model: PRIMARY_MODEL,
+            contents: {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: fileType.includes('pdf') ? 'application/pdf' : 'text/plain',
+                    data: fileContentBase64,
+                  },
                 },
-              },
-              {
-                text: 'Extract all resume text, professional work history, skills, and education verbatim from this document.',
-              },
-            ],
+                {
+                  text: 'Extract all resume text, professional work history, skills, and education verbatim from this document.',
+                },
+              ],
+            },
           },
-        });
-        extractedText = parseResponse.text || '';
+          45000
+        );
+        extractedText = parseResponse?.text || '';
       } catch (e) {
         console.warn('Multimodal extraction failed, falling back to raw text placeholder:', e);
+        extractedText = `Extracted resume document: ${fileName}`;
+      }
+
+      if (!extractedText) {
         extractedText = `Extracted resume document: ${fileName}`;
       }
     }
@@ -204,9 +355,10 @@ app.post('/api/resumes/upload', async (req: Request, res: Response) => {
     };
 
     try {
-      const structResponse = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: `You are an expert technical recruiter and resume intelligence parser. Parse the following resume text into a clean JSON structure:
+      const structResponse = await safeGenerateContent(
+        {
+          model: PRIMARY_MODEL,
+          contents: `You are an expert technical recruiter and resume intelligence parser. Parse the following resume text into a clean JSON structure:
 ${extractedText}
 
 Respond ONLY with valid JSON with keys:
@@ -218,22 +370,24 @@ Respond ONLY with valid JSON with keys:
   "experience": [{"role": string, "company": string, "duration": string, "highlights": string[]}],
   "education": [{"degree": string, "institution": string, "year": string}]
 }`,
-        config: {
-          responseMimeType: 'application/json',
+          config: {
+            responseMimeType: 'application/json',
+          },
         },
-      });
+        30000
+      );
 
-      if (structResponse.text) {
+      if (structResponse?.text) {
         parsedProfile = JSON.parse(structResponse.text);
       }
     } catch (e) {
       console.warn('Structured profile parsing fallback:', e);
     }
 
-    const resumes = db.getResumes(userId);
-    const newResume = db.addResume({
+    const resumes = await db.getResumes(uid);
+    const newResume = await db.addResume({
       id: 'res_' + Math.random().toString(36).substring(2, 9),
-      userId,
+      userId: uid,
       fileName: fileName || 'Uploaded_Resume.pdf',
       fileSizeBytes: extractedText.length * 2,
       fileType,
@@ -250,33 +404,30 @@ Respond ONLY with valid JSON with keys:
   }
 });
 
-app.post('/api/resumes/:id/primary', (req: Request, res: Response) => {
-  const userId = (req.body.userId as string) || DEFAULT_USER_ID;
-  const success = db.setPrimaryResume(req.params.id, userId);
+app.post('/api/resumes/:id/primary', async (req: AuthedRequest, res: Response) => {
+  const success = await db.setPrimaryResume(req.params.id, req.auth!.uid);
   res.json({ success });
 });
 
-app.delete('/api/resumes/:id', (req: Request, res: Response) => {
-  const userId = (req.query.userId as string) || DEFAULT_USER_ID;
-  const success = db.deleteResume(req.params.id, userId);
+app.delete('/api/resumes/:id', async (req: AuthedRequest, res: Response) => {
+  const success = await db.deleteResume(req.params.id, req.auth!.uid);
   res.json({ success });
 });
 
 // Knowledge Documents
-app.get('/api/documents', (req: Request, res: Response) => {
-  const userId = (req.query.userId as string) || DEFAULT_USER_ID;
-  res.json(db.getDocuments(userId));
+app.get('/api/documents', async (req: AuthedRequest, res: Response) => {
+  res.json(await db.getDocuments(req.auth!.uid));
 });
 
-app.post('/api/documents/upload', (req: Request, res: Response) => {
-  const { userId = DEFAULT_USER_ID, title, category, content } = req.body;
+app.post('/api/documents/upload', async (req: AuthedRequest, res: Response) => {
+  const { title, category, content } = req.body;
   if (!title || !content) {
     return res.status(400).json({ error: 'Title and content required' });
   }
   const chunks = Math.ceil(content.length / 500);
-  const doc = db.addDocument({
+  const doc = await db.addDocument({
     id: 'doc_' + Math.random().toString(36).substring(2, 9),
-    userId,
+    userId: req.auth!.uid,
     title,
     category: category || 'technical_notes',
     fileSizeBytes: content.length,
@@ -287,26 +438,26 @@ app.post('/api/documents/upload', (req: Request, res: Response) => {
   res.json(doc);
 });
 
-app.delete('/api/documents/:id', (req: Request, res: Response) => {
-  const userId = (req.query.userId as string) || DEFAULT_USER_ID;
-  const success = db.deleteDocument(req.params.id, userId);
+app.delete('/api/documents/:id', async (req: AuthedRequest, res: Response) => {
+  const success = await db.deleteDocument(req.params.id, req.auth!.uid);
   res.json({ success });
 });
 
 // Sessions
-app.get('/api/sessions', (req: Request, res: Response) => {
-  const userId = (req.query.userId as string) || DEFAULT_USER_ID;
-  res.json(db.getSessions(userId));
+app.get('/api/sessions', async (req: AuthedRequest, res: Response) => {
+  res.json(await db.getSessions(req.auth!.uid));
 });
 
-app.post('/api/sessions/create', (req: Request, res: Response) => {
-  const { userId = DEFAULT_USER_ID, targetRole, targetCompany, resumeId } = req.body;
-  const resumes = db.getResumes(userId);
-  const selectedResume = resumes.find((r) => r.id === resumeId) || resumes.find((r) => r.isPrimary);
+app.post('/api/sessions/create', async (req: AuthedRequest, res: Response) => {
+  const uid = req.auth!.uid;
+  const { targetRole, targetCompany, resumeId } = req.body;
+  const resumes = await db.getResumes(uid);
+  const selectedResume =
+    resumes.find((r) => r.id === resumeId) || resumes.find((r) => r.isPrimary);
 
-  const session = db.createSession({
+  const session = await db.createSession({
     id: 'sess_' + Math.random().toString(36).substring(2, 9),
-    userId,
+    userId: uid,
     targetRole: targetRole || 'Software Engineer',
     targetCompany: targetCompany || 'General Tech',
     resumeId: selectedResume?.id,
@@ -321,32 +472,70 @@ app.post('/api/sessions/create', (req: Request, res: Response) => {
   res.json(session);
 });
 
-app.post('/api/sessions/:id/status', (req: Request, res: Response) => {
+app.post('/api/sessions/:id/status', async (req: AuthedRequest, res: Response) => {
   const { status, durationDelta = 0 } = req.body;
-  const session = db.updateSessionStatus(req.params.id, status, durationDelta);
-  if (!session) return res.status(404).json({ error: 'Session not found' });
-  res.json(session);
+  const session = await loadOwnedSession(req, res);
+  if (!session) return;
+
+  // Bill completed time against the credit wallet (1 credit / minute by default).
+  if (status === 'completed' && durationDelta > 0) {
+    const settings = await db.getAdminSettings();
+    const credits = Math.max(
+      1,
+      Math.ceil(durationDelta / 60 / Math.max(1, settings.creditsPerMinute))
+    );
+    const deduction = await db.deductCredits(
+      req.auth!.uid,
+      credits,
+      `${session.targetCompany} ${session.targetRole} interview session (${Math.ceil(durationDelta / 60)} mins)`,
+      session.id
+    );
+
+    const updated = await db.updateSessionStatus(
+      session.id,
+      status,
+      durationDelta,
+      deduction.success
+        ? { creditsDeducted: (session.creditsDeducted || 0) + credits }
+        : undefined
+    );
+    if (!updated) return res.status(404).json({ error: 'Session not found' });
+
+    return res.json({
+      ...updated,
+      creditsCharged: deduction.success ? credits : 0,
+      insufficientCredits: !deduction.success,
+      balanceAfter: deduction.balanceAfter,
+    });
+  }
+
+  const updated = await db.updateSessionStatus(req.params.id, status, durationDelta);
+  if (!updated) return res.status(404).json({ error: 'Session not found' });
+  res.json(updated);
 });
 
-app.get('/api/sessions/:id/data', (req: Request, res: Response) => {
-  const sessionId = req.params.id;
-  const session = db.getSession(sessionId);
-  if (!session) return res.status(404).json({ error: 'Session not found' });
-  const transcripts = db.getTranscripts(sessionId);
-  const answers = db.getAnswers(sessionId);
-  const notes = db.getSessionNotes(sessionId);
+app.get('/api/sessions/:id/data', async (req: AuthedRequest, res: Response) => {
+  const session = await loadOwnedSession(req, res);
+  if (!session) return;
+  const [transcripts, answers, notes] = await Promise.all([
+    db.getTranscripts(session.id),
+    db.getAnswers(session.id),
+    db.getSessionNotes(session.id),
+  ]);
   res.json({ session, transcripts, answers, notes });
 });
 
 // Transcript Ingestion & Question Detection
-app.post('/api/sessions/:id/transcript', async (req: Request, res: Response) => {
+app.post('/api/sessions/:id/transcript', async (req: AuthedRequest, res: Response) => {
   try {
-    const sessionId = req.params.id;
     const { speaker = 'interviewer', text } = req.body;
 
     if (!text || !text.trim()) {
       return res.status(400).json({ error: 'Text required' });
     }
+
+    const session = await loadOwnedSession(req, res);
+    if (!session) return;
 
     const cleanText = text.trim();
 
@@ -372,11 +561,14 @@ Respond ONLY with valid JSON:
   "category": "behavioral" | "technical" | "coding" | "smalltalk"
 }`;
 
-        const detectResult = await safeGenerateContent({
-          model: 'gemini-3.8-flash',
-          contents: detectPrompt,
-          config: { responseMimeType: 'application/json' },
-        });
+        const detectResult = await safeGenerateContent(
+          {
+            model: PRIMARY_MODEL,
+            contents: detectPrompt,
+            config: { responseMimeType: 'application/json' },
+          },
+          15000
+        );
 
         if (detectResult && detectResult.text) {
           const parsed = JSON.parse(detectResult.text);
@@ -399,7 +591,7 @@ Respond ONLY with valid JSON:
 
     const line: TranscriptLine = {
       id: 'tr_' + Math.random().toString(36).substring(2, 9),
-      sessionId,
+      sessionId: session.id,
       speaker,
       text: cleanText,
       isQuestion,
@@ -408,7 +600,7 @@ Respond ONLY with valid JSON:
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     };
 
-    db.addTranscriptLine(sessionId, line);
+    await db.addTranscriptLine(session.id, line);
     res.json(line);
   } catch (error: any) {
     console.error('Transcript error:', error);
@@ -417,18 +609,22 @@ Respond ONLY with valid JSON:
 });
 
 // AI Answer Engine (Personalized, Grounded in Resume & Knowledge Base)
-app.post('/api/sessions/:id/generate-answer', async (req: Request, res: Response) => {
+app.post('/api/sessions/:id/generate-answer', async (req: AuthedRequest, res: Response) => {
   try {
-    const sessionId = req.params.id;
     const { questionText, answerStyle = 'star', customHint } = req.body;
 
-    const session = db.getSession(sessionId);
-    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const session = await loadOwnedSession(req, res);
+    if (!session) return;
 
     // Retrieve Candidate Context
-    const resumes = db.getResumes(session.userId);
-    const resume = (session.resumeId && resumes.find((r) => r.id === session.resumeId)) || resumes.find((r) => r.isPrimary) || resumes[0];
-    const documents = db.getDocuments(session.userId);
+    const [resumes, documents] = await Promise.all([
+      db.getResumes(session.userId),
+      db.getDocuments(session.userId),
+    ]);
+    const resume =
+      (session.resumeId && resumes.find((r) => r.id === session.resumeId)) ||
+      resumes.find((r) => r.isPrimary) ||
+      resumes[0];
 
     const resumeContext = resume
       ? `CANDIDATE ACTUAL BACKGROUND:
@@ -483,7 +679,7 @@ Generate the response in JSON format:
 }`;
 
     const answerResponse = await safeGenerateContent({
-      model: 'gemini-3.8-flash',
+      model: PRIMARY_MODEL,
       contents: prompt,
       config: {
         systemInstruction,
@@ -521,7 +717,7 @@ Generate the response in JSON format:
 
     const answerRecord: SessionAnswer = {
       id: 'ans_' + Math.random().toString(36).substring(2, 9),
-      sessionId,
+      sessionId: session.id,
       questionText,
       category: parsedResult.category || 'behavioral',
       answerText: parsedResult.answerText,
@@ -533,7 +729,7 @@ Generate the response in JSON format:
       createdAt: new Date().toISOString(),
     };
 
-    db.addAnswer(sessionId, answerRecord);
+    await db.addAnswer(session.id, answerRecord);
     res.json(answerRecord);
   } catch (error: any) {
     console.error('Answer generation error:', error);
@@ -542,7 +738,7 @@ Generate the response in JSON format:
 });
 
 // Coding Interview Assistant
-app.post('/api/coding/analyze', async (req: Request, res: Response) => {
+app.post('/api/coding/analyze', async (req: AuthedRequest, res: Response) => {
   try {
     const { title, description, language = 'python', userCode } = req.body;
 
@@ -575,7 +771,7 @@ Respond strictly in JSON format:
 }`;
 
     const codingResponse = await safeGenerateContent({
-      model: 'gemini-3.8-flash',
+      model: PRIMARY_MODEL,
       contents: codingPrompt,
       config: {
         responseMimeType: 'application/json',
@@ -621,7 +817,7 @@ def solution(nums: list[int], target: int) -> list[int]:
   }
 });
 
-app.post('/api/coding/execute', (req: Request, res: Response) => {
+app.post('/api/coding/execute', (req: AuthedRequest, res: Response) => {
   const { code, language, testCases } = req.body;
   // Controlled simulated execution harness with test assertions
   const results = (testCases || [
@@ -647,14 +843,21 @@ app.post('/api/coding/execute', (req: Request, res: Response) => {
 });
 
 // AI Notes & Session Summary Generator
-app.post('/api/notes/generate', async (req: Request, res: Response) => {
+app.post('/api/notes/generate', async (req: AuthedRequest, res: Response) => {
   try {
     const { sessionId } = req.body;
-    const session = db.getSession(sessionId);
+    const session = await db.getSession(sessionId);
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
-    const transcripts = db.getTranscripts(sessionId);
-    const answers = db.getAnswers(sessionId);
+    const role = req.auth!.role;
+    if (session.userId !== req.auth!.uid && role !== 'super_admin' && role !== 'admin') {
+      return res.status(403).json({ error: 'You do not have access to this session.' });
+    }
+
+    const [transcripts, answers] = await Promise.all([
+      db.getTranscripts(sessionId),
+      db.getAnswers(sessionId),
+    ]);
 
     const conversationTranscript = transcripts
       .map((t) => `${t.speaker.toUpperCase()} (${t.timestamp}): ${t.text}`)
@@ -682,7 +885,7 @@ Generate a comprehensive post-interview synthesis in JSON format:
 }`;
 
     const summaryResponse = await safeGenerateContent({
-      model: 'gemini-3.8-flash',
+      model: PRIMARY_MODEL,
       contents: prompt,
       config: { responseMimeType: 'application/json' },
     });
@@ -726,7 +929,7 @@ Generate a comprehensive post-interview synthesis in JSON format:
       createdAt: new Date().toISOString(),
     };
 
-    db.saveSessionNotes(notes);
+    await db.saveSessionNotes(notes);
     res.json(notes);
   } catch (error: any) {
     console.error('Notes generation error:', error);
@@ -735,8 +938,8 @@ Generate a comprehensive post-interview synthesis in JSON format:
 });
 
 // Admin Console Endpoints (Protected RBAC)
-app.get('/api/admin/overview', (req: Request, res: Response) => {
-  const state = db.getState();
+app.get('/api/admin/overview', requireAdmin, async (req: AuthedRequest, res: Response) => {
+  const state = await db.getState();
   const totalCredits = Object.values(state.wallets).reduce((acc, w) => acc + w.balanceCredits, 0);
   const totalSessions = state.sessions.length;
   const activeSubscribers = Object.values(state.subscriptions).filter((s) => s.status === 'active').length;
@@ -751,35 +954,37 @@ app.get('/api/admin/overview', (req: Request, res: Response) => {
   });
 });
 
-app.get('/api/admin/users', (_req: Request, res: Response) => {
-  const state = db.getState();
-  const usersWithDetails = state.users.map((u) => ({
-    ...u,
-    wallet: db.getWallet(u.uid),
-    subscription: db.getSubscription(u.uid),
-    sessionsCount: db.getSessions(u.uid).length,
-    devicesCount: db.getDevices(u.uid).length,
-  }));
+app.get('/api/admin/users', requireAdmin, async (_req: AuthedRequest, res: Response) => {
+  const state = await db.getState();
+  const usersWithDetails = await Promise.all(
+    state.users.map(async (u) => ({
+      ...u,
+      wallet: await db.getWallet(u.uid),
+      subscription: await db.getSubscription(u.uid),
+      sessionsCount: state.sessions.filter((s) => s.userId === u.uid).length,
+      devicesCount: (await db.getDevices(u.uid)).length,
+    }))
+  );
   res.json(usersWithDetails);
 });
 
-app.post('/api/admin/adjust-credits', (req: Request, res: Response) => {
-  const { adminUserId = DEFAULT_USER_ID, targetUserId, amount, reason } = req.body;
+app.post('/api/admin/adjust-credits', requireAdmin, async (req: AuthedRequest, res: Response) => {
+  const { targetUserId, amount, reason } = req.body;
   const creditDelta = parseInt(amount, 10);
   if (!targetUserId || isNaN(creditDelta)) {
     return res.status(400).json({ error: 'targetUserId and numeric amount required' });
   }
 
-  const wallet = db.addCredits(
+  const wallet = await db.addCredits(
     targetUserId,
     creditDelta,
-    creditDelta >= 0 ? 'admin_grant' : 'session_deduction',
+    creditDelta >= 0 ? 'admin_grant' : 'refund',
     reason || 'Administrative credit balance adjustment'
   );
 
-  db.addAuditLog({
-    adminUserId,
-    adminEmail: db.getUser(adminUserId)?.email || 'admin@example.com',
+  await db.addAuditLog({
+    adminUserId: req.auth!.uid,
+    adminEmail: req.auth!.email,
     targetUserId,
     action: 'ADMIN_CREDIT_ADJUSTMENT',
     details: `Adjusted balance by ${creditDelta > 0 ? `+${creditDelta}` : creditDelta} credits. Reason: ${reason || 'Manual Adjustment'}`,
@@ -789,23 +994,17 @@ app.post('/api/admin/adjust-credits', (req: Request, res: Response) => {
   res.json({ success: true, wallet });
 });
 
-app.get('/api/admin/audit-logs', (_req: Request, res: Response) => {
-  res.json(db.getAuditLogs());
+app.get('/api/admin/audit-logs', requireAdmin, async (_req: AuthedRequest, res: Response) => {
+  res.json(await db.getAuditLogs());
 });
 
-app.get('/api/admin/settings', (_req: Request, res: Response) => {
-  res.json(db.getState().adminSettings);
+app.get('/api/admin/settings', requireAdmin, async (_req: AuthedRequest, res: Response) => {
+  res.json(await db.getAdminSettings());
 });
 
-app.post('/api/admin/settings', (req: Request, res: Response) => {
-  const state = db.getState();
-  state.adminSettings = {
-    ...state.adminSettings,
-    ...req.body,
-    updatedAt: new Date().toISOString(),
-  };
-  db.save(state);
-  res.json(state.adminSettings);
+app.post('/api/admin/settings', requireAdmin, async (req: AuthedRequest, res: Response) => {
+  const settings = await db.updateAdminSettings(req.body);
+  res.json(settings);
 });
 
 // Start Express server and mount Vite in development
@@ -826,6 +1025,10 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[AskMeAi] Server running on http://0.0.0.0:${PORT}`);
+    console.log(
+      `[AskMeAi] Auth: ${authEnabled ? 'Firebase ID tokens required' : 'local demo mode (no Firebase credentials)'}` +
+        ` | Store: ${db.kind}`
+    );
   });
 }
 

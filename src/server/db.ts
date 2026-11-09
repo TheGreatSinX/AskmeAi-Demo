@@ -16,6 +16,14 @@ import {
   AuditLog,
   SupportTicket,
 } from '../types';
+import { createDemoSeed, roleForEmail, DemoSeed } from './demoSeed';
+import { PRIMARY_MODEL } from './gemini';
+import {
+  DataStore,
+  CreditChangeResult,
+  DeviceRegistrationResult,
+  NewUserAccount,
+} from './dataStore';
 
 export interface DatabaseState {
   users: User[];
@@ -36,257 +44,59 @@ export interface DatabaseState {
 
 const DB_FILE = path.resolve(process.cwd(), 'data', 'database.json');
 
-const INITIAL_USER: User = {
-  uid: 'user_dev_01',
-  email: 'thegreatsinx@gmail.com',
-  displayName: 'Alex Rivers',
-  role: 'super_admin',
-  emailVerified: true,
-  createdAt: '2026-10-15T09:00:00Z',
+export const DEMO_USER_ID = 'user_dev_01';
+
+const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
+  activeAiProvider: 'google_gemini',
+  defaultModel: PRIMARY_MODEL,
+  costPerCreditUsd: 0.1,
+  creditsPerMinute: 1,
+  maintenanceMode: false,
+  maxSessionsPerUser: 10,
   updatedAt: new Date().toISOString(),
 };
 
-const INITIAL_WALLET: CreditWallet = {
-  userId: INITIAL_USER.uid,
-  balanceCredits: 450,
-  lifetimePurchased: 600,
-  lifetimeSpent: 150,
-  updatedAt: new Date().toISOString(),
-};
+function stateFromSeed(seed: DemoSeed): DatabaseState {
+  return {
+    users: [seed.user],
+    devices: seed.devices,
+    wallets: { [seed.user.uid]: seed.wallet },
+    transactions: seed.transactions,
+    subscriptions: { [seed.user.uid]: seed.subscription },
+    resumes: seed.resumes,
+    documents: seed.documents,
+    sessions: seed.sessions,
+    transcripts: seed.transcripts,
+    answers: seed.answers,
+    notes: seed.notes,
+    adminSettings: { ...DEFAULT_ADMIN_SETTINGS },
+    auditLogs: seed.auditLogs,
+    supportTickets: [],
+  };
+}
 
-const INITIAL_SUBSCRIPTION: Subscription = {
-  id: 'sub_pro_101',
-  userId: INITIAL_USER.uid,
-  planTier: 'pro',
-  status: 'active',
-  currentPeriodEnd: '2026-12-15T00:00:00Z',
-  cancelAtPeriodEnd: false,
-};
-
-const INITIAL_DEVICES: UserDevice[] = [
-  {
-    id: 'dev_macbook_pro',
-    userId: INITIAL_USER.uid,
-    deviceType: 'desktop',
-    deviceName: 'MacBook Pro (Chrome)',
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-    ipAddress: '192.168.1.104',
-    lastActiveAt: new Date().toISOString(),
-    sessionToken: 'tok_desk_active_981',
-    isCurrent: true,
-  },
-];
-
-const INITIAL_RESUME: Resume = {
-  id: 'res_primary_01',
-  userId: INITIAL_USER.uid,
-  fileName: 'Alex_Rivers_Staff_Software_Engineer.pdf',
-  fileSizeBytes: 245000,
-  fileType: 'application/pdf',
-  extractedText: `Alex Rivers - Staff Software Engineer
-Summary: Results-oriented software architect with 8+ years experience scaling high-throughput distributed systems and cloud platforms.
-Technical Skills: TypeScript, Go, Python, React, Distributed Systems, Kubernetes, Kafka, Redis, PostgreSQL, AWS, Microservices.
-Experience:
-- Staff Software Engineer at Stripe (2022 - Present): Led redesign of real-time payout processing pipeline, reducing latency by 42% for $12B annual volume. Architected idempotent transaction workflows handling 85,000 requests/sec.
-- Senior Backend Engineer at Airbnb (2019 - 2022): Designed and deployed resilient booking state machine. Reduced booking failure rate by 3.8% across millions of global reservations.
-- Software Engineer at Datadog (2017 - 2019): Built metrics aggregation collectors and time-series visualization pipelines in Go and React.
-Education:
-- B.S. in Computer Science, University of California, Berkeley (2017)`,
-  parsedProfile: {
-    name: 'Alex Rivers',
-    headline: 'Staff Software Engineer & Distributed Systems Architect',
-    summary: 'Results-oriented software architect with 8+ years experience scaling high-throughput distributed systems.',
-    skills: [
-      'Distributed Systems',
-      'TypeScript',
-      'Go',
-      'Python',
-      'React',
-      'Kafka',
-      'PostgreSQL',
-      'Kubernetes',
-      'AWS',
-      'Redis',
-      'High Throughput Architecture',
-    ],
-    experience: [
+/** Seed state used when no local database.json exists yet. */
+const INITIAL_STATE: DatabaseState = stateFromSeed(
+  createDemoSeed(DEMO_USER_ID, 'thegreatsinx@gmail.com', 'Alex Rivers', {
+    demo: true,
+    devices: [
       {
-        role: 'Staff Software Engineer',
-        company: 'Stripe',
-        duration: '2022 - Present',
-        highlights: [
-          'Led redesign of real-time payout processing pipeline, reducing latency by 42% for $12B volume.',
-          'Architected idempotent transaction workflows processing 85,000 requests/second with 99.999% uptime.',
-        ],
-      },
-      {
-        role: 'Senior Backend Engineer',
-        company: 'Airbnb',
-        duration: '2019 - 2022',
-        highlights: [
-          'Engineered resilient booking state machine, reducing failure rate by 3.8% across global reservation traffic.',
-          'Mentored 6 junior/mid engineers and established company-wide distributed tracing guidelines.',
-        ],
+        id: 'dev_macbook_pro',
+        userId: DEMO_USER_ID,
+        deviceType: 'desktop',
+        deviceName: 'MacBook Pro (Chrome)',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+        ipAddress: '192.168.1.104',
+        lastActiveAt: new Date().toISOString(),
+        sessionToken: 'tok_desk_active_981',
+        isCurrent: true,
       },
     ],
-    education: [
-      {
-        degree: 'B.S. in Computer Science',
-        institution: 'UC Berkeley',
-        year: '2017',
-      },
-    ],
-  },
-  isPrimary: true,
-  createdAt: '2026-10-18T10:30:00Z',
-};
+  })
+);
 
-const INITIAL_DOCUMENTS: KnowledgeDocument[] = [
-  {
-    id: 'doc_google_prep',
-    userId: INITIAL_USER.uid,
-    title: 'Google System Design & Leadership Principles Prep',
-    category: 'company_research',
-    fileSizeBytes: 84000,
-    content: `Google Technical Leadership & Engineering Culture:
-- Focus on Googleyness: Intellectual humility, thriving on ambiguity, proactive bias for action, and doing what's right for the user.
-- System Design Focus: Horizontal scalability, fault isolation, graceful degradation under network partition, CAP theorem tradeoffs.
-- Key Accomplishment to Highlight: At Stripe, when downstream banking partner experienced 20% timeout spikes, devised circuit breaker with exponential backoff and jitter that prevented cascading failures.`,
-    chunkCount: 3,
-    createdAt: '2026-10-20T14:15:00Z',
-  },
-];
-
-const INITIAL_SESSIONS: InterviewSession[] = [
-  {
-    id: 'sess_demo_01',
-    userId: INITIAL_USER.uid,
-    targetRole: 'Staff Software Engineer',
-    targetCompany: 'Google Cloud Platform',
-    resumeId: INITIAL_RESUME.id,
-    resumeName: INITIAL_RESUME.fileName,
-    status: 'completed',
-    startedAt: '2026-11-06T15:00:00Z',
-    endedAt: '2026-11-06T15:45:00Z',
-    totalDurationSeconds: 2700,
-    creditsDeducted: 45,
-    questionsCount: 4,
-    overallScore: 94,
-  },
-];
-
-const INITIAL_STATE: DatabaseState = {
-  users: [INITIAL_USER],
-  devices: INITIAL_DEVICES,
-  wallets: { [INITIAL_USER.uid]: INITIAL_WALLET },
-  transactions: [
-    {
-      id: 'tx_init_01',
-      userId: INITIAL_USER.uid,
-      amount: 500,
-      type: 'purchase',
-      balanceAfter: 500,
-      description: 'Pro Plan Monthly Credit Pack (500 credits)',
-      createdAt: '2026-10-15T09:05:00Z',
-    },
-    {
-      id: 'tx_init_02',
-      userId: INITIAL_USER.uid,
-      amount: -45,
-      type: 'session_deduction',
-      balanceAfter: 455,
-      description: 'GCP Staff Engineer Mock Session (45 mins)',
-      referenceId: 'sess_demo_01',
-      createdAt: '2026-11-06T15:45:00Z',
-    },
-  ],
-  subscriptions: { [INITIAL_USER.uid]: INITIAL_SUBSCRIPTION },
-  resumes: [INITIAL_RESUME],
-  documents: INITIAL_DOCUMENTS,
-  sessions: INITIAL_SESSIONS,
-  transcripts: {
-    sess_demo_01: [
-      {
-        id: 'tr_01',
-        sessionId: 'sess_demo_01',
-        speaker: 'interviewer',
-        text: 'Hello Alex, thanks for joining us today. To start off, could you tell us about a time you designed a high-throughput distributed system under severe latency constraints?',
-        isQuestion: true,
-        confidence: 0.98,
-        category: 'technical',
-        timestamp: '15:02:10',
-      },
-      {
-        id: 'tr_02',
-        sessionId: 'sess_demo_01',
-        speaker: 'candidate',
-        text: 'Certainly! At Stripe, I led the architectural overhaul of our real-time payout processing pipeline, where we needed sub-50ms latency across 85,000 requests per second.',
-        isQuestion: false,
-        confidence: 0.95,
-        timestamp: '15:03:00',
-      },
-    ],
-  },
-  answers: {
-    sess_demo_01: [
-      {
-        id: 'ans_01',
-        sessionId: 'sess_demo_01',
-        questionText: 'Could you tell us about a time you designed a high-throughput distributed system under severe latency constraints?',
-        category: 'technical',
-        answerText: 'Highlight your Stripe payout pipeline overhaul. Break down: Situation (Legacy batch payout pipeline bottlenecking at 85k req/s), Task (Reduce latency under 50ms while maintaining strict exactly-once payment guarantees), Action (Migrated from synchronous relational writes to an event-driven architecture using Kafka, Redis caching layer with write-behind queues, and partitioned idempotency keys), Result (Cut p99 latency by 42% and supported $12B annual volume with zero duplicate transactions).',
-        answerStyle: 'star',
-        starBreakdown: {
-          situation: 'At Stripe, our core payout pipeline faced latency spikes up to 450ms during peak merchant settlement windows.',
-          task: 'I was tasked with redesigning the ingestion and execution pipeline to achieve sub-50ms p99 latency without compromising strict financial idempotency.',
-          action: 'Architected an event-driven stream using Kafka partitioned by merchant ID, backed by Redis for in-memory ledger lock verification and asynchronous database flush.',
-          result: 'Reduced p99 latency by 42%, achieved 85,000 req/sec sustained throughput, and supported $12B in processed transactions without a single duplicate payout.',
-        },
-        groundingSources: ['Resume: Stripe - Staff Software Engineer', 'Knowledge: High Throughput Architecture'],
-        confidenceScore: 0.96,
-        saved: true,
-        createdAt: '2026-11-06T15:02:25Z',
-      },
-    ],
-  },
-  notes: {
-    sess_demo_01: {
-      id: 'note_demo_01',
-      sessionId: 'sess_demo_01',
-      userId: INITIAL_USER.uid,
-      executiveSummary: 'Strong technical interview demonstrating deep mastery of distributed systems, concurrency guarantees, and system resilience. Clear articulation using the STAR framework.',
-      keyTopicsDiscussed: ['Idempotency in Financial Systems', 'Kafka Partitioning Strategies', 'Circuit Breakers & Exponential Backoff', 'P99 Latency Optimization'],
-      actionItems: ['Prepare further depth on CAP theorem tradeoffs in cross-region replication', 'Follow up with thank-you email referencing the circuit breaker discussion'],
-      candidateStrengths: ['Quantifiable business impact metrics cited accurately', 'Structured communication without meandering', 'Seamless integration of actual Stripe experience'],
-      areasForImprovement: ['Elaborate more on disaster recovery and database shard failover protocols'],
-      thankYouEmailDraft: 'Hi GCP Hiring Team, Thank you for the insightful conversation today regarding your distributed cloud platform challenges. I especially enjoyed discussing partition strategies and idempotent ledger design...',
-      createdAt: '2026-11-06T15:46:00Z',
-    },
-  },
-  adminSettings: {
-    activeAiProvider: 'google_gemini',
-    defaultModel: 'gemini-3.8-flash',
-    costPerCreditUsd: 0.10,
-    creditsPerMinute: 1,
-    maintenanceMode: false,
-    maxSessionsPerUser: 10,
-    updatedAt: new Date().toISOString(),
-  },
-  auditLogs: [
-    {
-      id: 'aud_01',
-      adminUserId: INITIAL_USER.uid,
-      adminEmail: INITIAL_USER.email,
-      action: 'SYSTEM_BOOTSTRAP',
-      details: 'AskMeAi platform initialized with verified security rules and credit wallets.',
-      ipAddress: '127.0.0.1',
-      timestamp: '2026-10-15T09:00:00Z',
-    },
-  ],
-  supportTickets: [],
-};
-
-export class Database {
+export class Database implements DataStore {
+  readonly kind = 'file' as const;
   private state: DatabaseState;
 
   constructor() {
@@ -321,26 +131,69 @@ export class Database {
     }
   }
 
-  public getState(): DatabaseState {
-    return this.state;
+  public getState(): Promise<DatabaseState> {
+    return Promise.resolve(this.state);
   }
 
   // --- Users & Devices ---
-  public getUser(uid: string): User | undefined {
+  public async ensureUser(account: NewUserAccount): Promise<User> {
+    const existing = this.state.users.find((u) => u.uid === account.uid);
+    if (existing) {
+      const changed =
+        existing.email !== account.email ||
+        existing.displayName !== account.displayName ||
+        existing.photoURL !== account.photoURL ||
+        existing.emailVerified !== account.emailVerified;
+      if (changed) {
+        existing.email = account.email;
+        existing.displayName = account.displayName;
+        existing.photoURL = account.photoURL;
+        existing.emailVerified = account.emailVerified ?? existing.emailVerified;
+        existing.updatedAt = new Date().toISOString();
+        this.save();
+      }
+      return existing;
+    }
+
+    const seed = createDemoSeed(account.uid, account.email, account.displayName, {
+      demo: process.env.SEED_DEMO_DATA !== 'false',
+    });
+    const user: User = {
+      ...seed.user,
+      photoURL: account.photoURL,
+      emailVerified: account.emailVerified ?? false,
+      role: roleForEmail(account.email),
+    };
+    this.state.users.push(user);
+    this.state.wallets[account.uid] = seed.wallet;
+    this.state.subscriptions[account.uid] = seed.subscription;
+    this.state.resumes.push(...seed.resumes);
+    this.state.documents.push(...seed.documents);
+    this.state.sessions.push(...seed.sessions);
+    this.state.transactions.push(...seed.transactions);
+    Object.assign(this.state.transcripts, seed.transcripts);
+    Object.assign(this.state.answers, seed.answers);
+    Object.assign(this.state.notes, seed.notes);
+    this.state.auditLogs.unshift(...seed.auditLogs);
+    this.save();
+    return user;
+  }
+
+  public async getUser(uid: string): Promise<User | undefined> {
     return this.state.users.find((u) => u.uid === uid);
   }
 
-  public getDevices(userId: string): UserDevice[] {
+  public async getDevices(userId: string): Promise<UserDevice[]> {
     return this.state.devices.filter((d) => d.userId === userId);
   }
 
-  public registerDevice(
+  public async registerDevice(
     userId: string,
     deviceType: 'desktop' | 'mobile',
     deviceName: string,
     userAgent: string,
     ipAddress: string
-  ): { device: UserDevice; revokedOldDevice?: UserDevice } {
+  ): Promise<DeviceRegistrationResult> {
     // 1 active desktop + 1 active mobile rule
     const existingSameType = this.state.devices.filter(
       (d) => d.userId === userId && d.deviceType === deviceType
@@ -372,7 +225,7 @@ export class Database {
     return { device: newDevice, revokedOldDevice };
   }
 
-  public revokeDevice(deviceId: string, userId: string): boolean {
+  public async revokeDevice(deviceId: string, userId: string): Promise<boolean> {
     const initialLen = this.state.devices.length;
     this.state.devices = this.state.devices.filter(
       (d) => !(d.id === deviceId && d.userId === userId)
@@ -385,7 +238,7 @@ export class Database {
   }
 
   // --- Wallet & Credits ---
-  public getWallet(userId: string): CreditWallet {
+  public async getWallet(userId: string): Promise<CreditWallet> {
     if (!this.state.wallets[userId]) {
       this.state.wallets[userId] = {
         userId,
@@ -399,13 +252,13 @@ export class Database {
     return this.state.wallets[userId];
   }
 
-  public deductCredits(
+  public async deductCredits(
     userId: string,
     amount: number,
     description: string,
     referenceId?: string
-  ): { success: boolean; balanceAfter: number; error?: string } {
-    const wallet = this.getWallet(userId);
+  ): Promise<CreditChangeResult> {
+    const wallet = await this.getWallet(userId);
     if (wallet.balanceCredits < amount) {
       return {
         success: false,
@@ -433,13 +286,13 @@ export class Database {
     return { success: true, balanceAfter: wallet.balanceCredits };
   }
 
-  public addCredits(
+  public async addCredits(
     userId: string,
     amount: number,
     type: 'purchase' | 'admin_grant' | 'refund' | 'session_deduction',
     description: string
-  ): CreditWallet {
-    const wallet = this.getWallet(userId);
+  ): Promise<CreditWallet> {
+    const wallet = await this.getWallet(userId);
     wallet.balanceCredits += amount;
     if (type === 'purchase') {
       wallet.lifetimePurchased += amount;
@@ -460,12 +313,12 @@ export class Database {
     return wallet;
   }
 
-  public getTransactions(userId: string): CreditTransaction[] {
+  public async getTransactions(userId: string): Promise<CreditTransaction[]> {
     return this.state.transactions.filter((tx) => tx.userId === userId);
   }
 
   // --- Subscriptions ---
-  public getSubscription(userId: string): Subscription {
+  public async getSubscription(userId: string): Promise<Subscription> {
     if (!this.state.subscriptions[userId]) {
       this.state.subscriptions[userId] = {
         id: 'sub_' + Math.random().toString(36).substring(2, 9),
@@ -480,28 +333,33 @@ export class Database {
     return this.state.subscriptions[userId];
   }
 
-  public updateSubscription(
+  public async updateSubscription(
     userId: string,
     planTier: 'starter' | 'pro' | 'executive'
-  ): Subscription {
-    const sub = this.getSubscription(userId);
+  ): Promise<Subscription> {
+    const sub = await this.getSubscription(userId);
     sub.planTier = planTier;
     sub.currentPeriodEnd = new Date(Date.now() + 30 * 86400000).toISOString();
-    
+
     // Add bonus monthly credits based on plan
     const creditBonus = planTier === 'executive' ? 1500 : planTier === 'pro' ? 500 : 50;
-    this.addCredits(userId, creditBonus, 'purchase', `${planTier.toUpperCase()} Plan Subscription Bonus (${creditBonus} credits)`);
+    await this.addCredits(
+      userId,
+      creditBonus,
+      'purchase',
+      `${planTier.toUpperCase()} Plan Subscription Bonus (${creditBonus} credits)`
+    );
 
     this.save();
     return sub;
   }
 
   // --- Resumes & Documents ---
-  public getResumes(userId: string): Resume[] {
+  public async getResumes(userId: string): Promise<Resume[]> {
     return this.state.resumes.filter((r) => r.userId === userId);
   }
 
-  public addResume(resume: Resume): Resume {
+  public async addResume(resume: Resume): Promise<Resume> {
     if (resume.isPrimary) {
       this.state.resumes.forEach((r) => {
         if (r.userId === resume.userId) r.isPrimary = false;
@@ -512,7 +370,7 @@ export class Database {
     return resume;
   }
 
-  public setPrimaryResume(resumeId: string, userId: string): boolean {
+  public async setPrimaryResume(resumeId: string, userId: string): Promise<boolean> {
     let found = false;
     this.state.resumes.forEach((r) => {
       if (r.userId === userId) {
@@ -528,7 +386,7 @@ export class Database {
     return found;
   }
 
-  public deleteResume(resumeId: string, userId: string): boolean {
+  public async deleteResume(resumeId: string, userId: string): Promise<boolean> {
     const initialLen = this.state.resumes.length;
     this.state.resumes = this.state.resumes.filter(
       (r) => !(r.id === resumeId && r.userId === userId)
@@ -540,17 +398,17 @@ export class Database {
     return false;
   }
 
-  public getDocuments(userId: string): KnowledgeDocument[] {
+  public async getDocuments(userId: string): Promise<KnowledgeDocument[]> {
     return this.state.documents.filter((d) => d.userId === userId);
   }
 
-  public addDocument(doc: KnowledgeDocument): KnowledgeDocument {
+  public async addDocument(doc: KnowledgeDocument): Promise<KnowledgeDocument> {
     this.state.documents.unshift(doc);
     this.save();
     return doc;
   }
 
-  public deleteDocument(documentId: string, userId: string): boolean {
+  public async deleteDocument(documentId: string, userId: string): Promise<boolean> {
     const initialLen = this.state.documents.length;
     this.state.documents = this.state.documents.filter(
       (d) => !(d.id === documentId && d.userId === userId)
@@ -563,15 +421,15 @@ export class Database {
   }
 
   // --- Sessions & Transcripts ---
-  public getSessions(userId: string): InterviewSession[] {
+  public async getSessions(userId: string): Promise<InterviewSession[]> {
     return this.state.sessions.filter((s) => s.userId === userId);
   }
 
-  public getSession(sessionId: string): InterviewSession | undefined {
+  public async getSession(sessionId: string): Promise<InterviewSession | undefined> {
     return this.state.sessions.find((s) => s.id === sessionId);
   }
 
-  public createSession(session: InterviewSession): InterviewSession {
+  public async createSession(session: InterviewSession): Promise<InterviewSession> {
     this.state.sessions.unshift(session);
     this.state.transcripts[session.id] = [];
     this.state.answers[session.id] = [];
@@ -579,29 +437,31 @@ export class Database {
     return session;
   }
 
-  public updateSessionStatus(
+  public async updateSessionStatus(
     sessionId: string,
     status: InterviewSession['status'],
-    durationDelta = 0
-  ): InterviewSession | undefined {
-    const session = this.getSession(sessionId);
+    durationDelta = 0,
+    patch?: Partial<InterviewSession>
+  ): Promise<InterviewSession | undefined> {
+    const session = await this.getSession(sessionId);
     if (session) {
       session.status = status;
       session.totalDurationSeconds += durationDelta;
       if (status === 'completed') {
         session.endedAt = new Date().toISOString();
       }
+      if (patch) Object.assign(session, patch);
       this.save();
     }
     return session;
   }
 
-  public addTranscriptLine(sessionId: string, line: TranscriptLine): TranscriptLine {
+  public async addTranscriptLine(sessionId: string, line: TranscriptLine): Promise<TranscriptLine> {
     if (!this.state.transcripts[sessionId]) {
       this.state.transcripts[sessionId] = [];
     }
     this.state.transcripts[sessionId].push(line);
-    const session = this.getSession(sessionId);
+    const session = await this.getSession(sessionId);
     if (session && line.isQuestion) {
       session.questionsCount += 1;
     }
@@ -609,11 +469,11 @@ export class Database {
     return line;
   }
 
-  public getTranscripts(sessionId: string): TranscriptLine[] {
+  public async getTranscripts(sessionId: string): Promise<TranscriptLine[]> {
     return this.state.transcripts[sessionId] || [];
   }
 
-  public addAnswer(sessionId: string, answer: SessionAnswer): SessionAnswer {
+  public async addAnswer(sessionId: string, answer: SessionAnswer): Promise<SessionAnswer> {
     if (!this.state.answers[sessionId]) {
       this.state.answers[sessionId] = [];
     }
@@ -622,26 +482,26 @@ export class Database {
     return answer;
   }
 
-  public getAnswers(sessionId: string): SessionAnswer[] {
+  public async getAnswers(sessionId: string): Promise<SessionAnswer[]> {
     return this.state.answers[sessionId] || [];
   }
 
-  public getSessionNotes(sessionId: string): SessionNotes | undefined {
+  public async getSessionNotes(sessionId: string): Promise<SessionNotes | undefined> {
     return this.state.notes[sessionId];
   }
 
-  public saveSessionNotes(notes: SessionNotes): SessionNotes {
+  public async saveSessionNotes(notes: SessionNotes): Promise<SessionNotes> {
     this.state.notes[notes.sessionId] = notes;
     this.save();
     return notes;
   }
 
   // --- Admin ---
-  public getAuditLogs(): AuditLog[] {
+  public async getAuditLogs(): Promise<AuditLog[]> {
     return this.state.auditLogs;
   }
 
-  public addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): AuditLog {
+  public async addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): Promise<AuditLog> {
     const entry: AuditLog = {
       id: 'aud_' + Math.random().toString(36).substring(2, 9),
       ...log,
@@ -651,6 +511,25 @@ export class Database {
     this.save();
     return entry;
   }
+
+  public async getAdminSettings(): Promise<AdminSettings> {
+    if (!this.state.adminSettings) {
+      this.state.adminSettings = { ...DEFAULT_ADMIN_SETTINGS };
+      this.save();
+    }
+    return this.state.adminSettings;
+  }
+
+  public async updateAdminSettings(settings: Partial<AdminSettings>): Promise<AdminSettings> {
+    const current = await this.getAdminSettings();
+    this.state.adminSettings = {
+      ...current,
+      ...settings,
+      updatedAt: new Date().toISOString(),
+    };
+    this.save();
+    return this.state.adminSettings;
+  }
 }
 
-export const db = new Database();
+export const fileStore = new Database();

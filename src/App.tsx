@@ -5,6 +5,8 @@
 
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { useAuth } from './context/AuthContext';
+import { AuthScreen } from './components/AuthScreen';
 import { Navbar } from './components/Navbar';
 import { DesktopHUD } from './components/DesktopHUD';
 import { ElectronGuideModal } from './components/ElectronGuideModal';
@@ -16,7 +18,7 @@ import { KnowledgeBaseView } from './views/KnowledgeBaseView';
 import { NotesView } from './views/NotesView';
 import { OpenSourceView } from './views/OpenSourceView';
 import { AdminView } from './views/AdminView';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, X, Sparkles } from 'lucide-react';
 
 const MainContent: React.FC = () => {
   const { activeTab, toasts, dismissToast } = useApp();
@@ -49,8 +51,8 @@ const MainContent: React.FC = () => {
               toast.type === 'success'
                 ? 'bg-slate-900/95 border-emerald-500/40 text-emerald-200'
                 : toast.type === 'error'
-                ? 'bg-slate-900/95 border-rose-500/40 text-rose-200'
-                : 'bg-slate-900/95 border-cyan-500/40 text-cyan-200'
+                  ? 'bg-slate-900/95 border-rose-500/40 text-rose-200'
+                  : 'bg-slate-900/95 border-cyan-500/40 text-cyan-200'
             }`}
           >
             {toast.type === 'success' ? (
@@ -74,7 +76,24 @@ const MainContent: React.FC = () => {
   );
 };
 
+const Splash: React.FC = () => (
+  <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
+    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 shadow-lg shadow-emerald-500/20">
+      <Sparkles className="h-7 w-7 fill-slate-950" />
+    </div>
+    <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-800">
+      <div className="h-full w-1/2 animate-pulse rounded-full bg-emerald-500" />
+    </div>
+    <p className="text-xs font-medium text-slate-500">Restoring your session…</p>
+  </div>
+);
+
 export default function App() {
+  const { ready, initializing } = useAuth();
+
+  if (initializing) return <Splash />;
+  if (!ready) return <AuthScreen />;
+
   return (
     <AppProvider>
       <MainContent />

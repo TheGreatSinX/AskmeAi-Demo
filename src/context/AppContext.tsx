@@ -85,6 +85,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [sessions, setSessions] = useState<InterviewSession[]>([]);
   const [activeSession, setActiveSession] = useState<InterviewSession | null>(null);
+  const activeSessionRef = useRef<InterviewSession | null>(null);
+
+  // Keep the ref in sync so refreshState() can read it without re-creating
+  // (and therefore re-running) its mount effect.
+  useEffect(() => {
+    activeSessionRef.current = activeSession;
+  }, [activeSession]);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -139,9 +146,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSessions(data.sessions);
 
       // If active session exists, retain or load
-      if (!activeSession && data.sessions.length > 0) {
+      const current = activeSessionRef.current;
+      if (!current && data.sessions.length > 0) {
         const ongoing = data.sessions.find((s) => s.status === 'active' || s.status === 'paused');
         if (ongoing) {
+          activeSessionRef.current = ongoing;
           setActiveSession(ongoing);
           const full = await api.getSessionData(ongoing.id);
           setLiveTranscripts(full.transcripts || []);
@@ -150,11 +159,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (e: any) {
       console.error('Failed to load initial state:', e);
-      showToast('Could not sync with cloud database', 'error');
+      showToast(e?.message || 'Could not sync with cloud database', 'error');
     }
-  }, [activeSession, showToast]);
+  }, [showToast]);
 
-  // Initial load & device registration
+  // Initial load & device registration (runs once per signed-in session)
   useEffect(() => {
     refreshState();
 
@@ -167,7 +176,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           'info'
         );
       }
-    });
+    }).catch((e) => console.warn('Device registration failed:', e));
 
     // Global keyboard shortcut listeners: Cmd/Ctrl + Shift + Space toggles Floating HUD
     const handleKeyDown = (e: KeyboardEvent) => {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Sparkles,
   Mic,
@@ -17,6 +18,7 @@ import {
   Radio,
   Laptop,
   Heart,
+  LogOut,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -33,6 +35,7 @@ export const Navbar: React.FC = () => {
     setRefillModalOpen,
     setElectronGuideOpen,
   } = useApp();
+  const { authEnabled, signOut } = useAuth();
 
   const isLive = activeSession?.status === 'active';
 
@@ -213,6 +216,21 @@ export const Navbar: React.FC = () => {
             <Laptop className="h-3.5 w-3.5 text-amber-400" />
             <span className="hidden xl:inline">Desktop App</span>
           </button>
+
+          {/* Account & Sign Out (Firebase Auth) */}
+          {authEnabled && (
+            <button
+              onClick={() => signOut()}
+              title={`Signed in as ${user?.email || 'unknown'} — click to sign out`}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white transition-all"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 text-[10px] font-extrabold text-slate-950">
+                {(user?.displayName || user?.email || '?').trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="hidden lg:inline max-w-[8rem] truncate">{user?.displayName || user?.email}</span>
+              <LogOut className="h-3.5 w-3.5 text-slate-400" />
+            </button>
+          )}
 
           {/* Open Source Status Badge */}
           <button

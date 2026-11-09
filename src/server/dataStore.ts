@@ -16,6 +16,14 @@ import {
   AuditLog,
 } from '../types';
 
+/** Thrown by ensureUser when a Google account is not on the enrolled list. */
+export class EnrollmentError extends Error {
+  constructor(public readonly email: string, message?: string) {
+    super(message || `Invitation required: ${email} is not enrolled on this platform.`);
+    this.name = 'EnrollmentError';
+  }
+}
+
 export interface CreditChangeResult {
   success: boolean;
   balanceAfter: number;

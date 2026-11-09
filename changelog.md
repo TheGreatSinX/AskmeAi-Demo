@@ -10,6 +10,51 @@ automatically from GitHub.
 
 ## [Unreleased] — 2026-11-09
 
+### `4e8f146` — feat: ParakeetAI create-session wizard (Details → Preferences)
+
+Replicates ParakeetAI's two-step "Create session" modal — every control
+wired end-to-end, no decorative fake features:
+
+- **`src/components/CreateSessionModal.tsx`** (new): two-pane ink wizard
+  with a steps rail (Details → Preferences), Escape/backdrop close and
+  body scroll lock.
+  - *Details*: target company, target role, grounding resume,
+    session type (Interview / Meeting).
+  - *Preferences*: call language (12 locales — drives speech recognition
+    and answer language), **model** (populated from the real configured
+    pool), **answer format** (STAR / Concise / Deep Technical /
+    Step-by-step / Bullets / Full Script), **AI instructions**
+    (standing guidance, 20k cap with counter), **Auto Answer** toggle,
+    **Save transcript** toggle.
+  - Left-rail utilities: **View tutorial** (in-pane walkthrough) and
+    **Mock presets** (closes the modal and jumps to the mock tab);
+    mobile footer mirrors both.
+- **Real model preference**: `gemini.models` getter exports the
+  configured pool (primary + fallbacks); `/api/me` returns it as
+  `aiModels`; sessions persist `model` and `sessionModel()` re-validates
+  the id against the live pool on every answer request (unknown ids fall
+  back to the primary). The demo backend mirrors the pool.
+- **Auto Answer**: off = the STT pipeline still detects questions but
+  only toasts the match; Live Studio shows a manual **Answer** button on
+  unanswered detected questions. On = existing auto-generation, now in
+  the session's chosen answer style.
+- **Save transcript (consent)**: off = transcript lines are returned for
+  the live view but never persisted (server Firestore path and the demo
+  backend both guard `db.addTranscriptLine` / the localStorage write).
+- **Session defaults flow through**: `startNewSession` accepts the new
+  options, `/api/sessions/create` stores them (allow-listed style,
+  regex-guarded model id), and Live Studio seeds its format switcher
+  from `session.answerStyle`.
+- **Dashboard**: the inline start-session form is replaced by a CTA
+  panel (what/why grid + shield note) that opens the modal; the header
+  banner button opens it too.
+- **Tests**: `scripts/smoke-demo-api.mts` asserts the `aiModels` pool,
+  wizard defaults (star/true/true), a full prefs round-trip
+  (bullets/false/false/model), unknown-style rejection to `star`, and
+  that `saveTranscript:false` keeps lines out of storage while still
+  returning them live. `npm run lint`, `npm run build`, `npm run test:demo`
+  all green; edited `server.ts` boots clean (`/api/health` 200).
+
 ### `b0798bd` — ui+auth: "Ink & Signal" design revamp, strictly Google-only sign-in
 
 **Design system — out of "AI slop"** (no gradient buttons/text, no

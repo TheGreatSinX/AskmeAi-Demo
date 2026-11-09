@@ -15,13 +15,14 @@ import {
   Cpu,
   RefreshCw,
 } from 'lucide-react';
-import { AuditLog, AdminSettings } from '../types';
+import { AuditLog, AdminSettings, EnrolledUser, UserRole } from '../types';
 
 export const AdminView: React.FC = () => {
   const { user, showToast } = useApp();
 
   const [activeTab, setActiveTab] = useState<'users' | 'settings' | 'audits'>('users');
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [enrolledUsers, setEnrolledUsers] = useState<EnrolledUser[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const [overview, setOverview] = useState<any>(null);
@@ -32,19 +33,26 @@ export const AdminView: React.FC = () => {
   const [adjustmentReason, setAdjustmentReason] = useState<string>('');
   const [isAdjusting, setIsAdjusting] = useState(false);
 
+  // Invite user (invitation-only enrolment)
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<UserRole>('user');
+  const [isInviting, setIsInviting] = useState(false);
+
   useEffect(() => {
     loadAdminData();
   }, []);
 
   const loadAdminData = async () => {
     try {
-      const [u, a, s, o] = await Promise.all([
+      const [u, e, a, s, o] = await Promise.all([
         api.getAdminUsers(),
+        api.getAdminEnrolledUsers(),
         api.getAdminAuditLogs(),
         api.getAdminSettings(),
         api.getAdminOverview(),
       ]);
       setUsersList(u);
+      setEnrolledUsers(e);
       setAuditLogs(a);
       setSettings(s);
       setOverview(o);
@@ -80,6 +88,34 @@ export const AdminView: React.FC = () => {
       showToast('Admin system settings saved', 'success');
     } catch (e: any) {
       showToast('Failed to save settings', 'error');
+    }
+  };
+
+  const handleInviteUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setIsInviting(true);
+    try {
+      await api.inviteEnrolledUser(inviteEmail.trim(), inviteRole);
+      showToast(`Invited ${inviteEmail} (${inviteRole})`, 'success');
+      setInviteEmail('');
+      setInviteRole('user');
+      await loadAdminData();
+    } catch (err: any) {
+      showToast(err?.message || 'Invitation failed', 'error');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const handleRevokeUser = async (email: string) => {
+    if (!window.confirm(`Remove enrolment for ${email}?`)) return;
+    try {
+      await api.removeEnrolledUser(email);
+      showToast(`Removed enrolment for ${email}`, 'success');
+      await loadAdminData();
+    } catch (err: any) {
+      showToast(err?.message || 'Could not remove enrolment', 'error');
     }
   };
 
@@ -187,6 +223,101 @@ export const AdminView: React.FC = () => {
       {/* Tab: Users Management */}
       {activeTab === 'users' && (
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-4">
+          {/* Invite new member (invitation-only enrolment) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <p className="micro mb-1">Invite member</p>
+              <h3 className="text-sm font-semibold text-slate-100">Add an enrolled account</h3>
+            </div>
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-rose-400">
+              Invitation only · max two enrolled accounts
+            </span>
+          </div>
+
+          <form onSubmit={handleInviteUser} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] uppercase tracking-[0.1em] text-slate-400 font-semibold">Email</label>
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="someone@example.com"
+                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-[12px] text-slate-100 focus:border-emerald-500/60 focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] uppercase tracking-[0.1em] text-slate-400 font-semibold">Role</label>
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as UserRole)}
+                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-[12px] text-slate-100 focus:border-emerald-500/60 focus:outline-none"
+              >
+                <option value="user">Member</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                type="submit"
+                disabled={isInviting || !inviteEmail.trim()}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isInviting ? 'Inviting…' : 'Invite'}
+              </button>
+            </div>
+          </form>
+
+          {/* Enrolled accounts */}
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div>
+              <p className="micro mb-1">Enrolled accounts</p>
+              <h3 className="text-sm font-semibold text-slate-100">
+                Who can sign in ({enrolledUsers.length} enrolled)
+              </h3>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            {enrolledUsers.length > 0 ? (
+              enrolledUsers.map((eu) => (
+                <div
+                  key={eu.email}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[11px] text-slate-300">{eu.email}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
+                        eu.role === 'super_admin' || eu.role === 'admin'
+                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                          : 'bg-slate-800 text-slate-400 border border-slate-800'
+                      }`}
+                    >
+                      {eu.role}
+                    </span>
+                    {eu.provisioned ? (
+                      <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> signed in
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-500">awaiting first sign-in</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRevokeUser(eu.email)}
+                    disabled={enrolledUsers.length <= 1}
+                    title="Remove enrolment"
+                    className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[10px] uppercase tracking-[0.08em] font-semibold text-rose-400 transition-colors hover:bg-rose-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Revoke
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 text-center py-3">No enrolled accounts yet.</p>
+            )}
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>

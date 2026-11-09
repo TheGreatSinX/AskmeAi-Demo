@@ -55,6 +55,11 @@ interface AppContextType {
    * full of silent failures.
    */
   backendError: string | null;
+  /**
+   * Set when the signed-in Google account is not on the invitation-only
+   * enrolled list. The UI shows a dedicated wall instead of the app.
+   */
+  notEnrolled: string | null;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   dismissToast: (id: string) => void;
   // Audio controls
@@ -118,6 +123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [notEnrolled, setNotEnrolled] = useState<string | null>(null);
   const [aiModels, setAiModels] = useState<string[]>([]);
 
   // HUD and modal states
@@ -192,6 +198,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setBackendError(e.message);
         return;
       }
+
+      // Invitation-only platform: a signed-in Google account that is not on
+      // the enrolled list is refused with 403. Show a dedicated wall instead
+      // of the app (and keep the generic error path for everything else).
+      if (e?.status === 403 && /not enrolled|enrolment|invitation/i.test(e?.message || '')) {
+        setNotEnrolled(e.message);
+        showToast(e.message, 'error');
+        return;
+      }
+
       console.error('Failed to load initial state:', e);
       showToast(e?.message || 'Could not sync with cloud database', 'error');
     }
@@ -520,6 +536,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveSession,
         refreshState,
         backendError,
+        notEnrolled,
         showToast,
         dismissToast,
         startListening,

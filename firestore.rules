@@ -22,11 +22,17 @@ service cloud.firestore {
       );
     }
 
-    // Users Collection
+    // Users Collection (invitation-only platform).
+    //
+    // Account documents are provisioned server-side by firebase-admin after a
+    // Google ID token is verified AND the email is on the enrolled list
+    // (max two enrolled accounts, managed via /api/admin/enrolled-users).
+    // Clients never create their own user doc, so creation is admin-only here;
+    // the admin SDK bypasses these rules.
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
-      allow create: if isOwner(userId) && request.resource.data.role == 'user';
+      allow create: if isAdmin();
       allow update: if (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'uid'])) || isAdmin();
       allow delete: if isAdmin();
     }

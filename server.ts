@@ -5,7 +5,8 @@ import { fileURLToPath } from 'url';
 import { gemini, PRIMARY_MODEL } from './src/server/gemini.js';
 import { backupAi } from './src/server/backupAi.js';
 import { db, authEnabled, firebaseAdmin, DEMO_FALLBACK_UID } from './src/server/store.js';
-import { TranscriptLine, SessionAnswer, SessionNotes, UserRole } from './src/types/index.js';
+import { TranscriptLine, SessionAnswer, SessionNotes, UserRole, User } from './src/types/index.js';
+import { EnrollmentError } from './src/server/dataStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -141,14 +142,25 @@ async function attachAuth(req: AuthedRequest, res: Response, next: NextFunction)
 
   try {
     const decoded = await firebaseAdmin!.auth.verifyIdToken(header.slice(7));
-    const user = await db.ensureUser({
-      uid: decoded.uid,
-      email: decoded.email || '',
-      displayName:
-        decoded.name || (decoded.email ? decoded.email.split('@')[0] : 'Candidate'),
-      photoURL: decoded.picture,
-      emailVerified: decoded.email_verified ?? false,
-    });
+
+    let user: User;
+    try {
+      user = await db.ensureUser({
+        uid: decoded.uid,
+        email: decoded.email || '',
+        displayName:
+          decoded.name || (decoded.email ? decoded.email.split('@')[0] : 'Candidate'),
+        photoURL: decoded.picture,
+        emailVerified: decoded.email_verified ?? false,
+      });
+    } catch (err: any) {
+      // Invitation-only: a Google account that is not enrolled is refused at
+      // the door (403) rather than being silently provisioned.
+      if (err instanceof EnrollmentError) {
+        return res.status(403).json({ error: err.message });
+      }
+      throw err;
+    }
 
     req.auth = {
       uid: user.uid,
@@ -1259,6 +1271,93 @@ app.get('/api/admin/settings', requireAdmin, async (_req: AuthedRequest, res: Re
 app.post('/api/admin/settings', requireAdmin, async (req: AuthedRequest, res: Response) => {
   const settings = await db.updateAdminSettings(req.body);
   res.json(settings);
+});
+
+// ── Invitation-only enrolment (max two enrolled accounts) ──────────────────
+app.get('/api/admin/enrolled-users', requireAdmin, async (_req: AuthedRequest, res: Response) => {
+  const settings = await db.getAdminSettings();
+  const enrolledEmails = (settings.enrolledEmails || []).map((e) => e.toLowerCase());
+  const state = await db.getState();
+  const usersByEmail = new Map(
+    state.users.map((u) => [u.email.toLowerCase(), u])
+  );
+
+  res.json(
+    enrolledEmails.map((email) => {
+      const user = usersByEmail.get(email);
+      return {
+        email,
+        role: user?.role || 'user',
+        enrolledAt: user?.createdAt || '',
+        provisioned: !!user,
+      };
+    })
+  );
+});
+
+app.post('/api/admin/enrolled-users', requireAdmin, async (req: AuthedRequest, res: Response) => {
+  const { email, role = 'user' } = req.body || {};
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return res.status(400).json({ error: 'A valid email is required.' });
+  }
+
+  const settings = await db.getAdminSettings();
+  const enrolled = (settings.enrolledEmails || []).map((e) => e.toLowerCase());
+  const normalized = email.toLowerCase();
+
+  if (enrolled.includes(normalized)) {
+    return res.status(409).json({ error: 'This email is already enrolled.' });
+  }
+  if (enrolled.length >= 2) {
+    return res.status(403).json({
+      error: 'Enrolment cap reached: this platform accepts only two enrolled accounts.',
+    });
+  }
+
+  const next = await db.updateAdminSettings({
+    enrolledEmails: [...enrolled, normalized],
+  });
+
+  await db.addAuditLog({
+    adminUserId: req.auth!.uid,
+    adminEmail: req.auth!.email,
+    targetUserId: undefined,
+    action: 'ADMIN_ENROLLED_USER',
+    details: `Invited ${email} to the platform (role: ${role}).`,
+    ipAddress: req.ip || '127.0.0.1',
+  });
+
+  res.json({ enrolled: next.enrolledEmails, email: normalized });
+});
+
+app.delete('/api/admin/enrolled-users/:email', requireAdmin, async (req: AuthedRequest, res: Response) => {
+  const normalized = req.params.email.toLowerCase();
+  const settings = await db.getAdminSettings();
+  const enrolled = (settings.enrolledEmails || []).map((e) => e.toLowerCase());
+
+  if (!enrolled.includes(normalized)) {
+    return res.status(404).json({ error: 'This email is not enrolled.' });
+  }
+
+  // Never unenroll the last remaining account (keeps the platform reachable).
+  if (enrolled.length <= 1) {
+    return res.status(403).json({ error: 'Cannot unenroll the last enrolled account.' });
+  }
+
+  const next = await db.updateAdminSettings({
+    enrolledEmails: enrolled.filter((e) => e !== normalized),
+  });
+
+  await db.addAuditLog({
+    adminUserId: req.auth!.uid,
+    adminEmail: req.auth!.email,
+    targetUserId: undefined,
+    action: 'ADMIN_UNENROLLED_USER',
+    details: `Removed enrolment for ${req.params.email}.`,
+    ipAddress: req.ip || '127.0.0.1',
+  });
+
+  res.json({ enrolled: next.enrolledEmails, removed: normalized });
 });
 
 // Start Express server and mount Vite in development

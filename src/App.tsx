@@ -23,8 +23,49 @@ import { AdminView } from './views/AdminView';
 import { CheckCircle2, AlertCircle, Info, X, RefreshCw, Compass } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { activeTab, toasts, dismissToast, backendError, refreshState } = useApp();
-  const { enterDemo } = useAuth();
+  const { activeTab, toasts, dismissToast, backendError, notEnrolled, refreshState } = useApp();
+  const { enterDemo, signOut } = useAuth();
+
+  // The signed-in Google account is not on the invitation-only enrolled list.
+  if (notEnrolled) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10 text-slate-100">
+        <div className="panel w-full max-w-lg p-8 text-center">
+          <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400">
+            <AlertCircle className="h-5 w-5" />
+          </div>
+          <p className="micro mb-3">Access</p>
+          <h1 className="display text-2xl">Account not enrolled</h1>
+          <p className="mt-3 text-sm leading-relaxed text-slate-400">{notEnrolled}</p>
+          <p className="mt-3 text-[12px] text-slate-500">
+            AskMeAi is invitation-only. Ask an administrator to add your Google
+            account to the enrolled list, then sign in again.
+          </p>
+          <div className="mt-6 flex flex-col items-center gap-2.5 sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                signOut();
+              }}
+              className="btn btn-ghost"
+            >
+              <X className="h-3.5 w-3.5" /> Sign out
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                enterDemo();
+                void refreshState();
+              }}
+              className="btn btn-ghost"
+            >
+              <Compass className="h-3.5 w-3.5" /> Explore the demo instead
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // The page was served without the API behind it (static preview, wrong URL,
   // proxy without /api). Explain once instead of failing request by request.

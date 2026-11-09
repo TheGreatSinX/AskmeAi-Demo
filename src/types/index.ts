@@ -220,7 +220,19 @@ export interface AdminSettings {
   creditsPerMinute: number;
   maintenanceMode: boolean;
   maxSessionsPerUser: number;
+  /** Emails allowed to sign in. Invitation-only platform: any Google account
+   *  not on this list is rejected at sign-in. Capped at two enrolled accounts. */
+  enrolledEmails: string[];
   updatedAt: string;
+}
+
+/** Result of enrolling a new invited account. */
+export interface EnrolledUser {
+  email: string;
+  role: UserRole;
+  enrolledAt: string;
+  enrolledBy?: string;
+  provisioned: boolean; // true once the user has signed in at least once
 }
 
 export interface AuditLog {

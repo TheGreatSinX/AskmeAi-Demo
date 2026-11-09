@@ -23,6 +23,7 @@ import {
   CreditChangeResult,
   DeviceRegistrationResult,
   NewUserAccount,
+  EnrollmentError,
 } from './dataStore';
 
 export interface DatabaseState {
@@ -53,6 +54,9 @@ const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   creditsPerMinute: 1,
   maintenanceMode: false,
   maxSessionsPerUser: 10,
+  // Invitation-only platform: only enrolled Google accounts may sign in.
+  // Seeded with the platform owner; the admin adds the second enrolled account.
+  enrolledEmails: ['thegreatsinx@gmail.com'],
   updatedAt: new Date().toISOString(),
 };
 
@@ -158,6 +162,12 @@ export class Database implements DataStore {
     const seed = createDemoSeed(account.uid, account.email, account.displayName, {
       demo: process.env.SEED_DEMO_DATA !== 'false',
     });
+    // Invitation-only: a brand-new account must be on the enrolled list.
+    const settings = await this.getAdminSettings();
+    const enrolled = (settings.enrolledEmails || []).map((e) => e.toLowerCase());
+    if (!enrolled.includes(account.email.toLowerCase())) {
+      throw new EnrollmentError(account.email);
+    }
     const user: User = {
       ...seed.user,
       photoURL: account.photoURL,

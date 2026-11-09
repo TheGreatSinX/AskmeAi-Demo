@@ -27,6 +27,7 @@ import type {
   SessionNotes,
   TranscriptLine,
   UserDevice,
+  UserRole,
 } from '../types';
 
 const STORAGE_KEY = 'askmeai.demo.v1';
@@ -43,6 +44,8 @@ const DEFAULT_SETTINGS: AdminSettings = {
   creditsPerMinute: 6,
   maintenanceMode: false,
   maxSessionsPerUser: 10,
+  // Invitation-only demo: only the demo account is enrolled by default.
+  enrolledEmails: ['demo@askmeai.local'],
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
@@ -697,6 +700,41 @@ export async function demoFetch(path: string, init: RequestInit = {}): Promise<a
       return s.adminSettings;
     }
     return s.adminSettings;
+  }
+
+  // ── Invitation-only enrolment (demo mirror) ──────────────────────────────
+  if (route === '/api/admin/enrolled-users') {
+    if (method === 'GET') {
+      return (s.adminSettings.enrolledEmails || []).map((email: string) => ({
+        email,
+        role: s.user.email === email ? (s.user.role as UserRole) : 'user',
+        enrolledAt: s.user.createdAt,
+        provisioned: s.user.email === email,
+      }));
+    }
+    if (method === 'POST') {
+      const email = String(body?.email || '').toLowerCase();
+      if (!email || !email.includes('@')) throw new Error('A valid email is required.');
+      const enrolled = s.adminSettings.enrolledEmails || [];
+      if (enrolled.includes(email)) throw new Error('This email is already enrolled.');
+      if (enrolled.length >= 2) throw new Error('Enrolment cap reached: this platform accepts only two enrolled accounts.');
+      s.adminSettings.enrolledEmails = [...enrolled, email];
+      save();
+      return { enrolled: s.adminSettings.enrolledEmails, email };
+    }
+    if (method === 'DELETE') {
+      throw new Error('Use /api/admin/enrolled-users/:email');
+    }
+  }
+
+  if (route.match(/^\/api\/admin\/enrolled-users\/([^/]+)$/) && method === 'DELETE') {
+    const email = route.match(/^\/api\/admin\/enrolled-users\/([^/]+)$/)![1].toLowerCase();
+    const enrolled = s.adminSettings.enrolledEmails || [];
+    if (!enrolled.includes(email)) throw new Error('This email is not enrolled.');
+    if (enrolled.length <= 1) throw new Error('Cannot unenroll the last enrolled account.');
+    s.adminSettings.enrolledEmails = enrolled.filter((e: string) => e !== email);
+    save();
+    return { enrolled: s.adminSettings.enrolledEmails, removed: email };
   }
 
   // Unrecognised route: lists render as empty, everything else as an object.

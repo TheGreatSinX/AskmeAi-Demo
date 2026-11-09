@@ -11,6 +11,8 @@ import {
   SessionNotes,
   UserDevice,
   AdminSettings,
+  EnrolledUser,
+  UserRole,
   AuditLog,
 } from '../types';
 import { getAuthToken, refreshAuthToken } from './authToken';
@@ -331,5 +333,18 @@ export const api = {
 
   async updateAdminSettings(settings: Partial<AdminSettings>): Promise<AdminSettings> {
     return json('/api/admin/settings', post('/api/admin/settings', settings), 'Failed to save settings');
+  },
+
+  // Invitation-only enrolment (admin)
+  async getAdminEnrolledUsers(): Promise<EnrolledUser[]> {
+    return json('/api/admin/enrolled-users', {}, 'Failed to load enrolled users');
+  },
+
+  async inviteEnrolledUser(email: string, role: UserRole = 'user') {
+    return json('/api/admin/enrolled-users', post('/api/admin/enrolled-users', { email, role }), 'Failed to invite user');
+  },
+
+  async removeEnrolledUser(email: string) {
+    return json(`/api/admin/enrolled-users/${encodeURIComponent(email)}`, { method: 'DELETE' }, 'Failed to remove enrolment');
   },
 };

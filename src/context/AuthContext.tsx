@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
+  signInWithRedirect,
   signInWithPopup,
+  getRedirectResult,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -96,6 +98,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setInitializing(false);
       }
     );
+
+    // Handle redirect result from Google sign-in (signInWithRedirect)
+    getRedirectResult(auth)
+      .then((result) => {
+        const user = result?.user;
+        if (user) {
+          userRef.current = user;
+          setFirebaseUser(user);
+        }
+        setInitializing(false);
+      })
+      .catch((err) => {
+        console.error('Redirect result error:', err);
+        setInitializing(false);
+      });
+
     return () => {
       unsubscribe();
       setTokenProvider(null);
@@ -147,7 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = useCallback(async () => {
     if (!auth) throw new Error('Firebase Auth is not configured.');
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      await signInWithRedirect(auth, new GoogleAuthProvider());
     } catch (err: any) {
       throw new Error(friendlyAuthError(err));
     }

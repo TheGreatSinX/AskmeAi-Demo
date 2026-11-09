@@ -81,21 +81,7 @@ function stateFromSeed(seed: DemoSeed): DatabaseState {
 
 /** Seed state used when no local database.json exists yet. */
 const INITIAL_STATE: DatabaseState = stateFromSeed(
-  createDemoSeed(DEMO_USER_ID, 'thegreatsinx@gmail.com', 'Alex Rivers', {
-    devices: [
-      {
-        id: 'dev_macbook_pro',
-        userId: DEMO_USER_ID,
-        deviceType: 'desktop',
-        deviceName: 'MacBook Pro (Chrome)',
-        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-        ipAddress: '192.168.1.104',
-        lastActiveAt: new Date().toISOString(),
-        sessionToken: 'tok_desk_active_981',
-        isCurrent: true,
-      },
-    ],
-  })
+  createDemoSeed(DEMO_USER_ID, 'thegreatsinx@gmail.com', 'Platform Owner', {})
 );
 
 export class Database implements DataStore {

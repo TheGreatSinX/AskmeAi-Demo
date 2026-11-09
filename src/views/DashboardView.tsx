@@ -192,7 +192,7 @@ export const DashboardView: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <span className="block text-sm font-semibold text-slate-100">
-                  {primaryResume.parsedProfile?.name || 'Alex Rivers'}
+                  {primaryResume.parsedProfile?.name || 'Candidate'}
                 </span>
                 <span className="mt-0.5 block line-clamp-1 text-xs text-slate-500">
                   {primaryResume.parsedProfile?.headline}

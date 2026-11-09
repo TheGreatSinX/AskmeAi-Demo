@@ -159,12 +159,7 @@ export class FirestoreStore implements DataStore {
       await batch.commit();
       return user;
     }
-    // Invitation-only: once admins exist, a brand-new account must be on the enrolled list.
-    const settings = await this.getAdminSettings();
-    const enrolled = (settings.enrolledEmails || []).map((e) => e.toLowerCase());
-    if (!enrolled.includes(account.email.toLowerCase())) {
-      throw new EnrollmentError(account.email);
-    }
+    // Any Google-authenticated account can sign up as a regular user.
     const user: User = {
       ...seed.user,
       photoURL: account.photoURL,

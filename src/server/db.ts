@@ -145,43 +145,15 @@ export class Database implements DataStore {
     }
 
     const seed = createDemoSeed(account.uid, account.email, account.displayName, {});
-    // Bootstrap: if no admin exists yet, the first signer-up becomes super_admin
-    // regardless of enrollment list (otherwise no one could ever become admin).
+    // Bootstrap: if no admin exists yet, the first signer-up becomes super_admin.
     const existingAdmins = this.state.users.filter((u) =>
       u.role === 'super_admin' || u.role === 'admin'
     );
-    if (existingAdmins.length === 0) {
-      const user: User = {
-        ...seed.user,
-        photoURL: account.photoURL,
-        emailVerified: account.emailVerified ?? false,
-        role: 'super_admin',
-      };
-      this.state.users.push(user);
-      this.state.wallets[account.uid] = seed.wallet;
-      this.state.subscriptions[account.uid] = seed.subscription;
-      this.state.resumes.push(...seed.resumes);
-      this.state.documents.push(...seed.documents);
-      this.state.sessions.push(...seed.sessions);
-      this.state.transactions.push(...seed.transactions);
-      Object.assign(this.state.transcripts, seed.transcripts);
-      Object.assign(this.state.answers, seed.answers);
-      Object.assign(this.state.notes, seed.notes);
-      this.state.auditLogs.unshift(...seed.auditLogs);
-      this.save();
-      return user;
-    }
-    // Invitation-only: once admins exist, a brand-new account must be on the enrolled list.
-    const settings = await this.getAdminSettings();
-    const enrolled = (settings.enrolledEmails || []).map((e) => e.toLowerCase());
-    if (!enrolled.includes(account.email.toLowerCase())) {
-      throw new EnrollmentError(account.email);
-    }
     const user: User = {
       ...seed.user,
       photoURL: account.photoURL,
       emailVerified: account.emailVerified ?? false,
-      role: roleForEmail(account.email),
+      role: existingAdmins.length === 0 ? 'super_admin' : 'user',
     };
     this.state.users.push(user);
     this.state.wallets[account.uid] = seed.wallet;

@@ -145,21 +145,43 @@ export class Database implements DataStore {
     }
 
     const seed = createDemoSeed(account.uid, account.email, account.displayName, {});
-    // Invitation-only: a brand-new account must be on the enrolled list.
+    // Bootstrap: if no admin exists yet, the first signer-up becomes super_admin
+    // regardless of enrollment list (otherwise no one could ever become admin).
+    const existingAdmins = this.state.users.filter((u) =>
+      u.role === 'super_admin' || u.role === 'admin'
+    );
+    if (existingAdmins.length === 0) {
+      const user: User = {
+        ...seed.user,
+        photoURL: account.photoURL,
+        emailVerified: account.emailVerified ?? false,
+        role: 'super_admin',
+      };
+      this.state.users.push(user);
+      this.state.wallets[account.uid] = seed.wallet;
+      this.state.subscriptions[account.uid] = seed.subscription;
+      this.state.resumes.push(...seed.resumes);
+      this.state.documents.push(...seed.documents);
+      this.state.sessions.push(...seed.sessions);
+      this.state.transactions.push(...seed.transactions);
+      Object.assign(this.state.transcripts, seed.transcripts);
+      Object.assign(this.state.answers, seed.answers);
+      Object.assign(this.state.notes, seed.notes);
+      this.state.auditLogs.unshift(...seed.auditLogs);
+      this.save();
+      return user;
+    }
+    // Invitation-only: once admins exist, a brand-new account must be on the enrolled list.
     const settings = await this.getAdminSettings();
     const enrolled = (settings.enrolledEmails || []).map((e) => e.toLowerCase());
     if (!enrolled.includes(account.email.toLowerCase())) {
       throw new EnrollmentError(account.email);
     }
-    // Bootstrap: if no admin/super_admin exists yet, the first signer-up becomes super_admin.
-    const existingAdmins = this.state.users.filter((u) =>
-      u.role === 'super_admin' || u.role === 'admin'
-    );
     const user: User = {
       ...seed.user,
       photoURL: account.photoURL,
       emailVerified: account.emailVerified ?? false,
-      role: existingAdmins.length === 0 ? 'super_admin' : roleForEmail(account.email),
+      role: roleForEmail(account.email),
     };
     this.state.users.push(user);
     this.state.wallets[account.uid] = seed.wallet;

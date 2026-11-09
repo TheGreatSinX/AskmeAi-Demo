@@ -12,6 +12,7 @@ import {
   Search,
   Check,
   AlertTriangle,
+  AlertCircle,
   Cpu,
   RefreshCw,
   Code2,
@@ -41,9 +42,14 @@ export const AdminView: React.FC = () => {
   const [inviteRole, setInviteRole] = useState<UserRole>('user');
   const [isInviting, setIsInviting] = useState(false);
 
-  // Clear all user data (GDPR / right to be forgotten)
-  const [clearDataConfirm, setClearDataConfirm] = useState('');
+  // Clear all user data (GDPR / right to be forgotten) - modal based
+  const [clearModalOpen, setClearModalOpen] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState('');
   const [isClearing, setIsClearing] = useState(false);
+
+  // Revoke user confirmation modal
+  const [revokeModalOpen, setRevokeModalOpen] = useState(false);
+  const [revokeEmail, setRevokeEmail] = useState('');
 
   useEffect(() => {
     loadAdminData();
@@ -114,10 +120,16 @@ export const AdminView: React.FC = () => {
   };
 
   const handleRevokeUser = async (email: string) => {
-    if (!window.confirm(`Remove enrolment for ${email}?`)) return;
+    setRevokeEmail(email);
+    setRevokeModalOpen(true);
+  };
+
+  const confirmRevokeUser = async () => {
+    setRevokeModalOpen(false);
     try {
-      await api.removeEnrolledUser(email);
-      showToast(`Removed enrolment for ${email}`, 'success');
+      await api.removeEnrolledUser(revokeEmail);
+      showToast(`Removed enrolment for ${revokeEmail}`, 'success');
+      setRevokeEmail('');
       await loadAdminData();
     } catch (err: any) {
       showToast(err?.message || 'Could not remove enrolment', 'error');
@@ -125,15 +137,16 @@ export const AdminView: React.FC = () => {
   };
 
   const handleClearUserData = async () => {
-    if (clearDataConfirm !== 'DELETE') {
-      showToast('Please type DELETE to confirm', 'error');
+    if (clearConfirmText !== 'DELETE') {
+      showToast('Type DELETE to confirm', 'error');
       return;
     }
     setIsClearing(true);
     try {
       await api.clearUserData();
       showToast('All your data has been cleared', 'success');
-      setClearDataConfirm('');
+      setClearConfirmText('');
+      setClearModalOpen(false);
       await loadAdminData();
     } catch (err: any) {
       showToast(err?.message || 'Failed to clear data', 'error');
@@ -381,32 +394,12 @@ export const AdminView: React.FC = () => {
             </p>
 
             <div className="space-y-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-[0.1em] text-slate-400 font-semibold">
-                  Type DELETE to confirm
-                </label>
-                <input
-                  type="text"
-                  value={clearDataConfirm}
-                  onChange={(e) => setClearDataConfirm(e.target.value)}
-                  placeholder="DELETE"
-                  className={`w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-[12px] text-slate-100 ${
-                    clearDataConfirm === 'DELETE'
-                      ? 'border-emerald-500/60 text-emerald-400'
-                      : 'border-slate-800 placeholder-slate-600'
-                  } focus:border-emerald-500/60 focus:outline-none`}
-                />
-              </div>
               <button
-                onClick={handleClearUserData}
-                disabled={isClearing || clearDataConfirm !== 'DELETE'}
-                className={`w-full rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.08em] transition-colors ${
-                  clearDataConfirm === 'DELETE' && !isClearing
-                    ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30'
-                    : 'bg-slate-800 text-slate-500 hover:bg-slate-700'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                type="button"
+                onClick={() => setClearModalOpen(true)}
+                className="w-full rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.08em] text-rose-400 hover:bg-rose-500/20 transition-colors"
               >
-                {isClearing ? 'Clearing…' : 'Clear All My Data'}
+                Clear All My Data
               </button>
             </div>
           </div>
@@ -622,4 +615,155 @@ export const AdminView: React.FC = () => {
       )}
     </div>
   );
+
+  // ── Clear All Data Confirmation Modal ──
+  if (clearModalOpen) {
+    return (
+      <>
+        {selectedUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 animate-in fade-in duration-150">
+            <div className="relative w-full max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-4">
+              <h3 className="text-base font-bold text-white">
+                Manage Member: {selectedUser.displayName}
+              </h3>
+              <p className="text-xs text-slate-400">
+                Community Status: <span className="font-mono text-emerald-400 font-bold">100% Free & Unlimited</span> (Open Source).
+              </p>
+              <form onSubmit={handleCreditAdjustment} className="space-y-3">
+                <div>
+                  <label className="text-xs text-slate-300 block mb-1">Administrative Priority Boost</label>
+                  <input
+                    type="number"
+                    value={adjustmentAmount}
+                    onChange={(e) => setAdjustmentAmount(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-300 block mb-1">Required Audit Note / Reason</label>
+                  <input
+                    type="text"
+                    value={adjustmentReason}
+                    onChange={(e) => setAdjustmentReason(e.target.value)}
+                    placeholder="e.g. VIP community maintainer or core contributor"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUser(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAdjusting}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-500 hover:bg-purple-400 text-slate-950"
+                  >
+                    {isAdjusting ? 'Recording Audit...' : 'Confirm Update'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        {/* Clear All Data Modal */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Clear All Data</h3>
+                <p className="text-sm text-slate-400">
+                  This permanently deletes all your data: sessions, transcripts, answers, resumes,
+                  documents, devices, wallet, and subscription. Your account remains enrolled but
+                  starts blank. This cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="pt-4">
+              <label className="text-xs text-slate-400 block mb-2 uppercase tracking-wider text-[10px] font-semibold">
+                Type DELETE to confirm
+              </label>
+              <input
+                type="text"
+                value={clearConfirmText}
+                onChange={(e) => setClearConfirmText(e.target.value.toUpperCase())}
+                placeholder="DELETE"
+                className={`w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-slate-100 font-mono ${
+                  clearConfirmText === 'DELETE'
+                    ? 'border-emerald-500/60 focus:border-emerald-500 text-emerald-400'
+                    : 'border-slate-700 placeholder-slate-600'
+                } focus:border-emerald-500/60 focus:outline-none`}
+                maxLength={6}
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setClearModalOpen(false)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearUserData}
+                disabled={isClearing || clearConfirmText !== 'DELETE'}
+                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                  clearConfirmText === 'DELETE' && !isClearing
+                    ? 'bg-rose-500 text-white hover:bg-rose-400'
+                    : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {isClearing ? 'Clearing…' : 'Clear All Data'}
+              </button>
+            </div>
+          </div>
+        </div>
+        {/* Revoke User Confirmation Modal */}
+        {revokeModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 animate-in fade-in duration-150">
+            <div className="relative w-full max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Remove Enrolment</h3>
+                  <p className="text-sm text-slate-400">
+                    Remove enrolment for <span className="font-mono text-slate-200">{revokeEmail}</span>?
+                    They will no longer be able to sign in. This cannot be undone.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setRevokeModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmRevokeUser}
+                  disabled={isClearing}
+                  className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider bg-rose-500 text-white hover:bg-rose-400 disabled:opacity-50"
+                >
+                  {isClearing ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 };

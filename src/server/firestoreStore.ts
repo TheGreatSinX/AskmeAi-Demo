@@ -121,29 +121,61 @@ export class FirestoreStore implements DataStore {
     }
 
     const seed = createDemoSeed(account.uid, account.email, account.displayName, {});
-    // Invitation-only: a brand-new account must be on the enrolled list.
+    // Bootstrap: if no admin exists yet, the first signer-up becomes super_admin
+    // regardless of enrollment list (otherwise no one could ever become admin).
+    const adminSnap = await this.col(COLLECTIONS.users)
+      .where('role', 'in', ['super_admin', 'admin'])
+      .limit(1)
+      .get();
+    if (adminSnap.empty) {
+      const user: User = {
+        ...seed.user,
+        photoURL: account.photoURL,
+        emailVerified: account.emailVerified ?? false,
+        role: 'super_admin',
+      };
+      const batch = this.db.batch();
+      batch.set(ref, user);
+      batch.set(this.col(COLLECTIONS.wallets).doc(account.uid), seed.wallet);
+      batch.set(this.col(COLLECTIONS.subscriptions).doc(account.uid), seed.subscription);
+      seed.resumes.forEach((r) => batch.set(this.col(COLLECTIONS.resumes).doc(r.id), r));
+      seed.documents.forEach((d) => batch.set(this.col(COLLECTIONS.documents).doc(d.id), d));
+      seed.sessions.forEach((s) => batch.set(this.col(COLLECTIONS.sessions).doc(s.id), s));
+      seed.transactions.forEach((t) =>
+        batch.set(this.col(COLLECTIONS.transactions).doc(t.id), t)
+      );
+      Object.entries(seed.transcripts).forEach(([sessionId, lines]) =>
+        lines.forEach((line) => batch.set(this.col(COLLECTIONS.transcripts).doc(line.id), line))
+      );
+      Object.entries(seed.answers).forEach(([sessionId, answers]) =>
+        answers.forEach((answer) => batch.set(this.col(COLLECTIONS.answers).doc(answer.id), answer))
+      );
+      Object.entries(seed.notes).forEach(([sessionId, note]) =>
+        batch.set(this.col(COLLECTIONS.notes).doc(sessionId), note)
+      );
+      seed.auditLogs.forEach((log) =>
+        batch.set(this.col(COLLECTIONS.auditLogs).doc(log.id), log)
+      );
+      await batch.commit();
+      return user;
+    }
+    // Invitation-only: once admins exist, a brand-new account must be on the enrolled list.
     const settings = await this.getAdminSettings();
     const enrolled = (settings.enrolledEmails || []).map((e) => e.toLowerCase());
     if (!enrolled.includes(account.email.toLowerCase())) {
       throw new EnrollmentError(account.email);
     }
-    // Bootstrap: if no admin/super_admin exists yet, the first signer-up becomes super_admin.
-    const adminSnap = await this.col(COLLECTIONS.users)
-      .where('role', 'in', ['super_admin', 'admin'])
-      .limit(1)
-      .get();
     const user: User = {
       ...seed.user,
       photoURL: account.photoURL,
       emailVerified: account.emailVerified ?? false,
-      role: adminSnap.empty ? 'super_admin' : roleForEmail(account.email),
+      role: roleForEmail(account.email),
     };
 
     const batch = this.db.batch();
     batch.set(ref, user);
     batch.set(this.col(COLLECTIONS.wallets).doc(account.uid), seed.wallet);
     batch.set(this.col(COLLECTIONS.subscriptions).doc(account.uid), seed.subscription);
-
     seed.resumes.forEach((r) => batch.set(this.col(COLLECTIONS.resumes).doc(r.id), r));
     seed.documents.forEach((d) => batch.set(this.col(COLLECTIONS.documents).doc(d.id), d));
     seed.sessions.forEach((s) => batch.set(this.col(COLLECTIONS.sessions).doc(s.id), s));

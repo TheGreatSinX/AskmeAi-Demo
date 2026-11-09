@@ -35,7 +35,7 @@ export const Navbar: React.FC = () => {
     setRefillModalOpen,
     setElectronGuideOpen,
   } = useApp();
-  const { authEnabled, signOut } = useAuth();
+  const { authEnabled, demoMode, signOut } = useAuth();
 
   const isLive = activeSession?.status === 'active';
 
@@ -63,6 +63,14 @@ export const Navbar: React.FC = () => {
                 <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
                   COPILOT
                 </span>
+                {demoMode && (
+                  <span
+                    title="No backend connected — data lives in this browser only"
+                    className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-400 border border-amber-500/30"
+                  >
+                    DEMO
+                  </span>
+                )}
               </div>
               <span className="text-[10px] text-slate-400 font-medium">Real-Time Interview Assistant</span>
             </div>

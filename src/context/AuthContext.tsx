@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import { auth, authEnabled } from '../lib/firebase';
 import { setTokenProvider } from '../lib/authToken';
+import { isDemoMode, looksLikeSpaShell, onDemoModeChange, setDemoMode } from '../lib/api';
 
 interface AuthContextType {
   /** VITE_FIREBASE_* configuration present in the browser bundle. */
@@ -22,6 +23,13 @@ interface AuthContextType {
   /** Misconfiguration detected at runtime (e.g. server requires auth we can't perform). */
   configError: string | null;
   setConfigError: (message: string | null) => void;
+  /**
+   * No API behind this URL (static host): data is served by the in-browser
+   * demo backend. Drives the "Explore the demo" bypass and the DEMO chip.
+   */
+  demoMode: boolean;
+  /** The visitor chose to enter the demo (or was already past the gate). */
+  enterDemo: () => void;
   /** True when the app may render its main shell (signed in, or running in demo mode). */
   ready: boolean;
   signIn: (email: string, password: string) => Promise<void>;
@@ -69,7 +77,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [initializing, setInitializing] = useState(authEnabled);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [demoMode, setDemoModeState] = useState(isDemoMode());
+  const [demoEntered, setDemoEntered] = useState(false);
   const userRef = useRef<FirebaseUser | null>(null);
+
+  // The API layer flips demo mode when it discovers the SPA shell behind an
+  // /api path; mirror that here so the login screen and navbar can react.
+  useEffect(() => onDemoModeChange(setDemoModeState), []);
 
   // Keep the API layer pointed at the active session's ID token.
   useEffect(() => {
@@ -102,15 +116,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // When the client is not configured for Firebase, ask the server whether it
-  // still expects tokens (that combination means the build is missing keys).
+  // Probe /api/health on every load:
+  //  - a JSON answer may carry authRequired, which matters when this build has
+  //    no Firebase configuration (that combination means a broken build);
+  //  - a non-JSON answer (our own SPA shell, a 502 page, a 404) proves this
+  //    origin serves no API, which switches the app into in-browser demo mode.
   useEffect(() => {
-    if (authEnabled) return;
     let cancelled = false;
-    fetch('/api/health')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((health) => {
-        if (!cancelled && health?.authRequired) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+
+    fetch('/api/health', { signal: controller.signal })
+      .then(async (res) => {
+        const text = await res.text();
+        if (cancelled) return;
+
+        const trimmed = text.trim();
+        const isJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+        if (!isJson) {
+          if (!res.ok || looksLikeSpaShell(text)) setDemoMode(true);
+          return;
+        }
+
+        const health = JSON.parse(trimmed);
+        if (!authEnabled && health?.authRequired) {
           setConfigError(
             'This server requires Firebase Auth, but this build has no VITE_FIREBASE_* configuration. ' +
               'Add the Firebase web config to .env and restart the dev server.'
@@ -119,9 +148,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
       .catch(() => {
         /* server not reachable yet; AppContext surfaces the sync error */
-      });
+      })
+      .finally(() => clearTimeout(timer));
+
     return () => {
       cancelled = true;
+      controller.abort();
+      clearTimeout(timer);
     };
   }, []);
 
@@ -165,7 +198,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const enterDemo = useCallback(() => {
+    setDemoMode(true);
+    setDemoEntered(true);
+  }, []);
+
   const signOut = useCallback(async () => {
+    setDemoEntered(false); // back to the login screen (demo button stays if no backend)
     if (auth) await firebaseSignOut(auth);
   }, []);
 
@@ -175,7 +214,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     firebaseUser,
     configError,
     setConfigError,
-    ready: authEnabled ? Boolean(firebaseUser) && !initializing : !configError,
+    demoMode,
+    enterDemo,
+    ready:
+      demoEntered || (authEnabled ? Boolean(firebaseUser) && !initializing : !configError),
     signIn,
     signUp,
     signInWithGoogle,

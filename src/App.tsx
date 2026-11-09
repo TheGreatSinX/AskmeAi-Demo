@@ -18,10 +18,11 @@ import { KnowledgeBaseView } from './views/KnowledgeBaseView';
 import { NotesView } from './views/NotesView';
 import { OpenSourceView } from './views/OpenSourceView';
 import { AdminView } from './views/AdminView';
-import { CheckCircle2, AlertCircle, Info, X, Sparkles, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, X, Sparkles, RefreshCw, Compass } from 'lucide-react';
 
 const MainContent: React.FC = () => {
   const { activeTab, toasts, dismissToast, backendError, refreshState } = useApp();
+  const { enterDemo } = useAuth();
 
   // The page was served without the API behind it (static preview, wrong URL,
   // proxy without /api). Explain once instead of failing request by request.
@@ -38,13 +39,25 @@ const MainContent: React.FC = () => {
             This page is being served from{' '}
             <span className="font-mono text-slate-400">{typeof window !== 'undefined' ? window.location.origin : ''}</span>
           </p>
-          <button
-            type="button"
-            onClick={() => void refreshState()}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-slate-950"
-          >
-            <RefreshCw className="h-4 w-4" /> Retry
-          </button>
+          <div className="mt-6 flex flex-col items-center gap-2.5 sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={() => void refreshState()}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-slate-950"
+            >
+              <RefreshCw className="h-4 w-4" /> Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                enterDemo();
+                void refreshState();
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-slate-950"
+            >
+              <Compass className="h-4 w-4" /> Explore the demo instead
+            </button>
+          </div>
         </div>
       </div>
     );

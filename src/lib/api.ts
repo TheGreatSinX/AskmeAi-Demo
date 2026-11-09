@@ -14,6 +14,7 @@ import {
   AuditLog,
 } from '../types';
 import { getAuthToken, refreshAuthToken } from './authToken';
+import { demoFetch } from './demoApi';
 
 export class ApiError extends Error {
   status: number;
@@ -39,6 +40,44 @@ export const BACKEND_MISSING_MESSAGE =
   '`npm run preview` only serves the built UI and has no API.';
 
 /**
+ * Demo mode: this page has no API behind it, so requests are answered by the
+ * in-browser backend (demoApi.ts) instead of the network. Sticky for the life
+ * of the page - once proven absent, the backend does not reappear.
+ */
+let demoMode = false;
+const demoListeners = new Set<(active: boolean) => void>();
+
+export function isDemoMode(): boolean {
+  return demoMode;
+}
+
+export function setDemoMode(active: boolean): void {
+  if (demoMode === active) return;
+  demoMode = active;
+  demoListeners.forEach((listener) => listener(active));
+}
+
+/** Subscribe to demo-mode flips (used by AuthContext to drive its UI). */
+export function onDemoModeChange(listener: (active: boolean) => void): () => void {
+  demoListeners.add(listener);
+  return () => {
+    demoListeners.delete(listener);
+  };
+}
+
+/**
+ * True when a response body is this app's own SPA shell. Our Express server
+ * never answers an /api path with HTML (it returns JSON 401/400/404), so this
+ * is proof positive the request never reached a backend.
+ */
+export function looksLikeSpaShell(body: string): boolean {
+  if (!body) return false;
+  const head = body.slice(0, 600).toLowerCase();
+  if (!head.includes('<!doctype html') && !head.includes('<html')) return false;
+  return body.includes('id="root"') || /<title>\s*AskMeAi/i.test(body);
+}
+
+/**
  * Auth-aware fetch: attaches the Firebase ID token and transparently retries
  * once with a refreshed token when the server answers 401.
  */
@@ -61,6 +100,10 @@ async function request(path: string, init: RequestInit = {}, allowRefresh = true
 }
 
 async function json<T = any>(path: string, init: RequestInit = {}, fallback = 'Request failed'): Promise<T> {
+  // No backend behind this URL: answer locally instead of hitting a static
+  // server that can only reply with HTML or 405s for POSTs.
+  if (demoMode) return (await demoFetch(path, init)) as T;
+
   const res = await request(path, init);
   const text = (await res.text()).trim();
 
@@ -76,6 +119,14 @@ async function json<T = any>(path: string, init: RequestInit = {}, fallback = 'R
 
   if (body === null) {
     if (res.ok && text === '') return {} as T; // 204-style empty success
+
+    // The response is our own SPA shell: the request never reached an API.
+    // Switch to the in-browser backend so the app keeps working.
+    if (looksLikeSpaShell(text)) {
+      setDemoMode(true);
+      return (await demoFetch(path, init)) as T;
+    }
+
     throw new ApiError(res.status, BACKEND_MISSING_MESSAGE, 'backend-missing');
   }
 

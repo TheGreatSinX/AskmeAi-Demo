@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   Mic,
+  Compass,
 } from 'lucide-react';
 
 type Mode = 'signin' | 'signup' | 'reset';
@@ -137,7 +138,8 @@ const Field: React.FC<FieldProps> = ({
 );
 
 export const AuthScreen: React.FC = () => {
-  const { authEnabled, configError, signIn, signUp, signInWithGoogle, sendPasswordReset } = useAuth();
+  const { authEnabled, configError, demoMode, enterDemo, signIn, signUp, signInWithGoogle, sendPasswordReset } =
+    useAuth();
 
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
@@ -613,6 +615,32 @@ export const AuthScreen: React.FC = () => {
                     )}
                     Continue with Google
                   </button>
+
+                  {demoMode && (
+                    <>
+                      <div className="my-4 flex items-center gap-3">
+                        <div className="h-px flex-1 bg-slate-800" />
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+                          or explore without an account
+                        </span>
+                        <div className="h-px flex-1 bg-slate-800" />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={enterDemo}
+                        disabled={Boolean(busy)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Compass className="h-4 w-4" />
+                        Explore the demo
+                      </button>
+                      <p className="mt-2.5 text-center text-[11px] leading-relaxed text-slate-500">
+                        <span className="font-semibold text-amber-400/90">No backend connected.</span> This build runs
+                        entirely in your browser with sample data — nothing you enter leaves this device.
+                      </p>
+                    </>
+                  )}
                 </>
               )}
             </>

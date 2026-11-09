@@ -69,7 +69,12 @@ interface AppContextType {
   setRefillModalOpen: (open: boolean) => void;
   setElectronGuideOpen: (open: boolean) => void;
   // Quick session launcher
-  startNewSession: (targetRole: string, targetCompany: string, resumeId?: string) => Promise<InterviewSession>;
+  startNewSession: (
+    targetRole: string,
+    targetCompany: string,
+    resumeId?: string,
+    options?: { mode?: 'interview' | 'meeting'; instructions?: string; language?: string }
+  ) => Promise<InterviewSession>;
   endSession: (sessionId: string) => Promise<void>;
   // Live transcripts and answers cache
   liveTranscripts: TranscriptLine[];
@@ -257,7 +262,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = 'en-US';
+        // ParakeetAI-style language selection: follow the session's language (default en-US).
+        recognition.lang = activeSession?.language || 'en-US';
 
         recognition.onresult = async (event: any) => {
           for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -405,8 +411,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAudioState((prev) => ({ ...prev, selectedMicId: micId }));
   };
 
-  const startNewSession = async (targetRole: string, targetCompany: string, resumeId?: string) => {
-    const session = await api.createSession({ targetRole, targetCompany, resumeId });
+  const startNewSession = async (
+    targetRole: string,
+    targetCompany: string,
+    resumeId?: string,
+    options?: { mode?: 'interview' | 'meeting'; instructions?: string; language?: string }
+  ) => {
+    const session = await api.createSession({
+      targetRole,
+      targetCompany,
+      resumeId,
+      mode: options?.mode,
+      instructions: options?.instructions,
+      language: options?.language,
+    });
     setActiveSession(session);
     setLiveTranscripts([]);
     setLiveAnswers([]);

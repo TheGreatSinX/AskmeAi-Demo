@@ -450,7 +450,7 @@ app.get('/api/sessions', async (req: AuthedRequest, res: Response) => {
 
 app.post('/api/sessions/create', async (req: AuthedRequest, res: Response) => {
   const uid = req.auth!.uid;
-  const { targetRole, targetCompany, resumeId } = req.body;
+  const { targetRole, targetCompany, resumeId, mode, instructions, language } = req.body;
   const resumes = await db.getResumes(uid);
   const selectedResume =
     resumes.find((r) => r.id === resumeId) || resumes.find((r) => r.isPrimary);
@@ -467,6 +467,10 @@ app.post('/api/sessions/create', async (req: AuthedRequest, res: Response) => {
     totalDurationSeconds: 0,
     creditsDeducted: 0,
     questionsCount: 0,
+    // ParakeetAI-style session settings
+    mode: mode === 'meeting' ? 'meeting' : 'interview',
+    instructions: typeof instructions === 'string' ? instructions.slice(0, 20000) : undefined,
+    language: typeof language === 'string' && language.trim() ? language.trim().slice(0, 20) : 'en-US',
   });
 
   res.json(session);
@@ -611,7 +615,11 @@ Respond ONLY with valid JSON:
 // AI Answer Engine (Personalized, Grounded in Resume & Knowledge Base)
 app.post('/api/sessions/:id/generate-answer', async (req: AuthedRequest, res: Response) => {
   try {
-    const { questionText, answerStyle = 'star', customHint } = req.body;
+    const { questionText, customHint } = req.body;
+    const ALLOWED_STYLES = ['star', 'concise', 'technical', 'step_by_step', 'bullets', 'full_script'] as const;
+    const answerStyle: (typeof ALLOWED_STYLES)[number] = ALLOWED_STYLES.includes(req.body.answerStyle)
+      ? req.body.answerStyle
+      : 'star';
 
     const session = await loadOwnedSession(req, res);
     if (!session) return;
@@ -653,8 +661,12 @@ CRITICAL RULES:
    - 'concise': High-impact executive talking points under 60 words.
    - 'technical': Architectural depth, tradeoffs, throughput/scale, and failure recovery.
    - 'step_by_step': Structured troubleshooting or structured thought workflow.
+   - 'bullets': Scannable bullet points (• prefix), each one line, no prose paragraphs.
+   - 'full_script': A word-for-word script the candidate can read aloud naturally, conversational, no headings or labels.
 4. Target Role: ${session.targetRole}
-5. Target Company: ${session.targetCompany}`;
+5. Target Company: ${session.targetCompany}
+6. Session mode: ${session.mode === 'meeting' ? 'REGULAR CALL/MEETING - answer as a helpful participant: concise contributions, clarifications, and recap points rather than interview answers.' : 'INTERVIEW - answer as the candidate being interviewed.'}
+${session.language && session.language !== 'en-US' ? `7. LANGUAGE: Write the entire answerText in the language matching "${session.language}" (e.g. the candidate's interview language). Keep any code or identifiers in English.\n` : ''}${session.instructions ? `8. STANDING INSTRUCTIONS FROM THE CANDIDATE (always obey): ${session.instructions}\n` : ''}${/(system design|design a|architect|architecture|scale|high availability|distributed)/i.test(questionText) ? `9. DIAGRAM: After the prose, include a fenced mermaid block (\`\`\`mermaid\nflowchart TD\n...\n\`\`\`) sketching the design. Use ONLY simple flowchart syntax: node ids like A, B, nodes with labels like A[Client], and edges like A --> B. No subgraphs, no classDef, no other diagram types.` : ''}`;
 
     const prompt = `INTERVIEW QUESTION: "${questionText}"
 ANSWER STYLE REQUESTED: ${answerStyle.toUpperCase()}
@@ -734,6 +746,211 @@ Generate the response in JSON format:
   } catch (error: any) {
     console.error('Answer generation error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate answer' });
+  }
+});
+
+// Screenshot / photo of a question -> grounded answer (multimodal, ParakeetAI-style)
+app.post('/api/sessions/:id/answer-from-image', async (req: AuthedRequest, res: Response) => {
+  try {
+    const { imageBase64, mimeType = 'image/png', answerStyle = 'star', customHint } = req.body;
+    if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.length < 64) {
+      return res.status(400).json({ error: 'imageBase64 required' });
+    }
+    // Guard against absurd payloads (15mb base64 ≈ 11mb binary) before touching the model.
+    if (imageBase64.length > 15_000_000) {
+      return res.status(413).json({ error: 'Image too large. Max 11 MB binary.' });
+    }
+
+    const session = await loadOwnedSession(req, res);
+    if (!session) return;
+
+    const resumes = await db.getResumes(session.userId);
+    const resume =
+      (session.resumeId && resumes.find((r) => r.id === session.resumeId)) ||
+      resumes.find((r) => r.isPrimary) ||
+      resumes[0];
+
+    const grounding = resume
+      ? `CANDIDATE BACKGROUND (ground answers in this, never invent credentials): ${resume.parsedProfile?.name || 'Candidate'} - ${resume.parsedProfile?.headline || ''}. Skills: ${(resume.parsedProfile?.skills || []).join(', ')}. Experience: ${(resume.parsedProfile?.experience || []).map((e) => `${e.role} at ${e.company}`).join('; ')}.`
+      : 'No resume provided - give general best-practice guidance.';
+
+    const response = await safeGenerateContent(
+      {
+        model: PRIMARY_MODEL,
+        contents: {
+          parts: [
+            { inlineData: { mimeType, data: imageBase64 } },
+            {
+              text: `The candidate uploaded a screenshot or photo of an interview question (or meeting slide/whiteboard). Read the question from the image, then answer it as AskMeAi, their real-time interview copilot.
+
+STYLE: ${answerStyle} (${answerStyle === 'bullets' ? 'scannable one-line bullet points' : answerStyle === 'full_script' ? 'word-for-word spoken script' : answerStyle === 'concise' ? 'under 60 words' : 'structured'})
+TARGET ROLE: ${session.targetRole} | TARGET COMPANY: ${session.targetCompany}
+${customHint ? `HINT: ${customHint}` : ''}
+${grounding}
+
+Respond ONLY with JSON:
+{
+  "questionText": "The question exactly as shown in the image, or a short description if none is legible",
+  "answerText": "Full formatted answer",
+  "category": "behavioral" | "technical" | "coding" | "smalltalk",
+  "groundingSources": ["What you used from the image and resume"],
+  "confidenceScore": 0.95
+}`,
+            },
+          ],
+        },
+        config: { responseMimeType: 'application/json' },
+      },
+      45000
+    );
+
+    let parsed: any = null;
+    if (response && response.text) {
+      try {
+        parsed = JSON.parse(response.text);
+      } catch (e) {
+        console.warn('Image answer JSON parse warning:', e);
+      }
+    }
+
+    const answerRecord: SessionAnswer = parsed || {
+      questionText: 'Question captured from screenshot / photo',
+      answerText:
+        'I read the screenshot, but the model could not parse it this time. Rephrase the question in the manual input and I will answer it immediately - or retry the capture with a tighter crop around the question text.',
+      category: 'technical',
+      groundingSources: ['Screenshot (unreadable)'],
+      confidenceScore: 0.5,
+    };
+
+    const record: SessionAnswer = {
+      id: 'ans_' + Math.random().toString(36).substring(2, 9),
+      sessionId: session.id,
+      questionText: String(answerRecord.questionText || 'Question captured from screenshot / photo'),
+      category: answerRecord.category || 'technical',
+      answerText: String(answerRecord.answerText || ''),
+      answerStyle,
+      groundingSources: Array.isArray(answerRecord.groundingSources) ? answerRecord.groundingSources : ['Screenshot'],
+      confidenceScore: answerRecord.confidenceScore || 0.9,
+      saved: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    await db.addAnswer(session.id, record);
+    res.json(record);
+  } catch (error: any) {
+    console.error('Image answer error:', error);
+    res.status(500).json({ error: error.message || 'Failed to answer from image' });
+  }
+});
+
+// ── Mock Interview: an AI interviewer that asks, listens, and scores ────────
+const MOCK_FALLBACK_QUESTIONS = [
+  { question: 'Walk me through your background and the accomplishment you are most proud of.', category: 'behavioral' },
+  { question: 'Tell me about a time you disagreed with a decision your team made. What did you do?', category: 'behavioral' },
+  { question: 'Describe the hardest bug or incident you have debugged end to end.', category: 'technical' },
+  { question: 'How would you design a rate limiter that works across a fleet of edge servers?', category: 'technical' },
+  { question: 'You need to process 10 million events an hour with exactly-once semantics. Walk me through the design.', category: 'coding' },
+  { question: 'Why are you interested in this role, and what would make you decline our offer?', category: 'behavioral' },
+  { question: 'Explain eventual consistency to a product manager, then to a staff engineer.', category: 'technical' },
+  { question: 'Design a URL shortener: storage, scale, and the trade-offs you would call out in review.', category: 'coding' },
+];
+
+app.post('/api/mock/next-question', async (req: AuthedRequest, res: Response) => {
+  try {
+    const { role = 'Software Engineer', company, difficulty = 'medium', language, history = [] } = req.body;
+    const round = (Array.isArray(history) ? history.length : 0) + 1;
+
+    const prompt = `You are a rigorous but friendly ${difficulty}-level interviewer at ${company || 'a top tech company'} for the ${role} role.
+Generate the next interview question (round ${round}). Vary the type across rounds: behavioral, technical deep-dive, system design, and coding.
+${history.length ? `Already asked (do NOT repeat or rephrase these):\n${history.map((h: any) => `- ${h.question}`).join('\n')}` : ''}
+${language && language !== 'en-US' ? `Ask the question in the language matching "${language}".` : ''}
+
+Respond ONLY with JSON: { "question": "the question", "category": "behavioral" | "technical" | "coding" | "smalltalk" }`;
+
+    const result = await safeGenerateContent(
+      { model: PRIMARY_MODEL, contents: prompt, config: { responseMimeType: 'application/json' } },
+      20000
+    );
+
+    if (result && result.text) {
+      try {
+        const parsed = JSON.parse(result.text);
+        if (parsed.question) {
+          return res.json({ question: parsed.question, category: parsed.category || 'behavioral', round });
+        }
+      } catch (e) {
+        console.warn('Mock question JSON parse warning:', e);
+      }
+    }
+
+    const asked = new Set((Array.isArray(history) ? history : []).map((h: any) => String(h.question)));
+    const unseen = MOCK_FALLBACK_QUESTIONS.filter((q) => !asked.has(q.question));
+    const pool = unseen.length ? unseen : MOCK_FALLBACK_QUESTIONS;
+    res.json({ ...pool[round % pool.length], round });
+  } catch (error: any) {
+    console.error('Mock question error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate question' });
+  }
+});
+
+app.post('/api/mock/evaluate', async (req: AuthedRequest, res: Response) => {
+  try {
+    const { question, answer, role = 'Software Engineer', company, language } = req.body;
+    if (!question || !answer) return res.status(400).json({ error: 'question and answer required' });
+
+    const prompt = `You are a hiring manager interviewing a candidate for ${role}${company ? ` at ${company}` : ''}.
+Score their spoken answer 0-100 and give coaching feedback.
+
+QUESTION: ${question}
+CANDIDATE ANSWER: ${answer}
+${language && language !== 'en-US' ? `Write all feedback fields in the language matching "${language}".` : ''}
+
+Respond ONLY with JSON:
+{
+  "score": <number 0-100>,
+  "verdict": "one-sentence overall assessment",
+  "strengths": ["specific thing that worked", "..."],
+  "improvements": ["specific, actionable fix", "..."],
+  "improvedAnswer": "a tightened model answer for this exact question, grounded in what they said",
+  "followUpHint": "the follow-up question an interviewer would most likely ask next"
+}`;
+
+    const result = await safeGenerateContent(
+      { model: PRIMARY_MODEL, contents: prompt, config: { responseMimeType: 'application/json' } },
+      30000
+    );
+
+    if (result && result.text) {
+      try {
+        const parsed = JSON.parse(result.text);
+        if (typeof parsed.score === 'number') {
+          return res.json({
+            score: Math.max(0, Math.min(100, Math.round(parsed.score))),
+            verdict: parsed.verdict || '',
+            strengths: parsed.strengths || [],
+            improvements: parsed.improvements || [],
+            improvedAnswer: parsed.improvedAnswer || '',
+            followUpHint: parsed.followUpHint || '',
+          });
+        }
+      } catch (e) {
+        console.warn('Mock evaluate JSON parse warning:', e);
+      }
+    }
+
+    // Canned coaching fallback so the mock never dead-ends.
+    const words = String(answer).trim().split(/\s+/).length;
+    res.json({
+      score: Math.max(35, Math.min(96, Math.round(45 + Math.min(words, 180) * 0.3))),
+      verdict: words < 40 ? 'Too thin - expand with context and a measurable result.' : 'Solid base - add one quantified outcome.',
+      strengths: ['Directly addresses the question', 'Clear structure'],
+      improvements: ['Open with context in one sentence', 'Quantify the result', 'Close with the lesson learned'],
+      improvedAnswer: `Set the scene in one sentence, give your actions, then the measurable result, then what you learned - anchored in something you actually shipped as ${role}.`,
+      followUpHint: 'Expect "what would you do differently?" next.',
+    });
+  } catch (error: any) {
+    console.error('Mock evaluate error:', error);
+    res.status(500).json({ error: error.message || 'Failed to evaluate answer' });
   }
 });
 

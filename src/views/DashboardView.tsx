@@ -38,6 +38,9 @@ export const DashboardView: React.FC = () => {
   const [selectedResumeId, setSelectedResumeId] = useState<string>(
     resumes.find((r) => r.isPrimary)?.id || resumes[0]?.id || ''
   );
+  const [sessionMode, setSessionMode] = useState<'interview' | 'meeting'>('interview');
+  const [instructions, setInstructions] = useState('');
+  const [language, setLanguage] = useState('en-US');
   const [isStarting, setIsStarting] = useState(false);
 
   const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
@@ -51,7 +54,11 @@ export const DashboardView: React.FC = () => {
 
     setIsStarting(true);
     try {
-      await startNewSession(targetRole, targetCompany, selectedResumeId);
+      await startNewSession(targetRole, targetCompany, selectedResumeId, {
+        mode: sessionMode,
+        instructions: instructions.trim() || undefined,
+        language,
+      });
     } catch (e: any) {
       showToast(e.message || 'Failed to start session', 'error');
     } finally {
@@ -263,6 +270,78 @@ export const DashboardView: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Session mode: interview vs regular call (ParakeetAI parity) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-purple-400" /> Session Mode
+                </label>
+                <div className="flex gap-2">
+                  {(
+                    [
+                      { id: 'interview', label: 'Interview' },
+                      { id: 'meeting', label: 'Regular Meeting' },
+                    ] as const
+                  ).map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSessionMode(m.id)}
+                      className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
+                        sessionMode === m.id
+                          ? 'bg-purple-500/20 border-purple-500/50 text-purple-200'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Language for speech recognition + answers */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-cyan-400" /> Interview Language
+                </label>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="en-US">English</option>
+                  <option value="es-ES">Español (Spanish)</option>
+                  <option value="fr-FR">Français (French)</option>
+                  <option value="de-DE">Deutsch (German)</option>
+                  <option value="pt-BR">Português (Portuguese)</option>
+                  <option value="hi-IN">हिन्दी (Hindi)</option>
+                  <option value="ja-JP">日本語 (Japanese)</option>
+                  <option value="ko-KR">한국어 (Korean)</option>
+                  <option value="zh-CN">中文 (Chinese)</option>
+                  <option value="ar-SA">العربية (Arabic)</option>
+                  <option value="it-IT">Italiano (Italian)</option>
+                  <option value="id-ID">Bahasa Indonesia</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Standing instructions for every answer (ParakeetAI Instructions field) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                <BookOpen className="h-3.5 w-3.5 text-emerald-400" /> Instructions for the Copilot
+                <span className="text-[10px] text-slate-500 font-normal">
+                  ({instructions.length}/20000) — applied to every answer
+                </span>
+              </label>
+              <textarea
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value.slice(0, 20000))}
+                rows={3}
+                placeholder="e.g. Keep answers under 60 seconds. Emphasise distributed systems experience. Use British English. Never mention my current employer."
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors resize-y"
+              />
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-400 flex items-center gap-3">

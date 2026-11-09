@@ -111,6 +111,9 @@ export interface KnowledgeChunk {
 
 export type SessionStatus = 'ready' | 'active' | 'paused' | 'completed';
 
+/** ParakeetAI-style session modes: a real interview vs. a regular call/meeting. */
+export type SessionMode = 'interview' | 'meeting';
+
 export interface InterviewSession {
   id: string;
   userId: string;
@@ -125,6 +128,12 @@ export interface InterviewSession {
   creditsDeducted: number;
   questionsCount: number;
   overallScore?: number;
+  /** 'interview' (default) asks/answers interview questions; 'meeting' tunes the copilot for regular calls. */
+  mode?: SessionMode;
+  /** User-authored standing instructions injected into every answer prompt (max 20k chars). */
+  instructions?: string;
+  /** BCP-47 language code for speech recognition and answer language, e.g. 'en-US'. */
+  language?: string;
 }
 
 export type SpeakerRole = 'interviewer' | 'candidate';
@@ -140,7 +149,13 @@ export interface TranscriptLine {
   timestamp: string;
 }
 
-export type AnswerStyle = 'star' | 'concise' | 'technical' | 'step_by_step';
+export type AnswerStyle =
+  | 'star'
+  | 'concise'
+  | 'technical'
+  | 'step_by_step'
+  | 'bullets'
+  | 'full_script';
 
 export interface SessionAnswer {
   id: string;

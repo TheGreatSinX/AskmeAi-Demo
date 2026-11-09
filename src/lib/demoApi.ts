@@ -143,6 +143,34 @@ That sequence keeps me from coding before I understand the problem, which is whe
     };
   }
 
+  if (style === 'bullets') {
+    return {
+      text: `Key talking points for: ${topic}
+
+• Context — I have solved this class of problem before: I define what "done" looks like first, then take the highest-risk piece.
+• Action — I wrote the plan down as one shared source of truth, reviewed the riskiest part first, and checked in at each milestone.
+• Evidence — in my last role that approach let us ship early with fewer regressions and less recurring effort.
+• Result — the team adopted the pattern for later projects, and I would bring the same discipline here: focused, measurable, communicated clearly.`,
+    };
+  }
+
+  if (style === 'full_script') {
+    return {
+      text: `Thanks for the question - happy to answer it.
+
+${star.situation}
+
+${star.task}
+
+${star.action}
+
+${star.result}
+
+So the short version is: I focus on the outcome, make the work legible to everyone else, and leave the system easier to change than I found it. I would bring exactly that approach to this role, and I am glad to go deeper on any part of it.`,
+      star,
+    };
+  }
+
   return {
     text: `Using the STAR method.
 
@@ -385,6 +413,9 @@ export async function demoFetch(path: string, init: RequestInit = {}): Promise<a
       totalDurationSeconds: 0,
       creditsDeducted: 0,
       questionsCount: 0,
+      mode: body.mode === 'meeting' ? 'meeting' : 'interview',
+      instructions: String(body.instructions || '').slice(0, 20000) || undefined,
+      language: body.language || 'en-US',
     };
     s.sessions = [session, ...s.sessions];
     save();
@@ -438,7 +469,9 @@ export async function demoFetch(path: string, init: RequestInit = {}): Promise<a
   if (answerMatch && method === 'POST') {
     const sessionId = answerMatch[1];
     const session = requireSession(sessionId);
-    const style: AnswerStyle = ['star', 'concise', 'technical', 'step_by_step'].includes(body.answerStyle)
+    const style: AnswerStyle = ['star', 'concise', 'technical', 'step_by_step', 'bullets', 'full_script'].includes(
+      body.answerStyle
+    )
       ? body.answerStyle
       : 'star';
     const questionText = String(body.questionText || 'Tell me about yourself');
@@ -460,6 +493,95 @@ export async function demoFetch(path: string, init: RequestInit = {}): Promise<a
     session.questionsCount = (session.questionsCount || 0) + 1;
     save();
     return answer;
+  }
+
+  // Screenshot / photo of a question -> answer (no network in demo mode)
+  const imageAnswerMatch = route.match(/^\/api\/sessions\/([^/]+)\/answer-from-image$/);
+  if (imageAnswerMatch && method === 'POST') {
+    const sessionId = imageAnswerMatch[1];
+    const session = requireSession(sessionId);
+    const style: AnswerStyle = ['star', 'concise', 'technical', 'step_by_step', 'bullets', 'full_script'].includes(
+      body.answerStyle
+    )
+      ? body.answerStyle
+      : 'star';
+    const composed = composeAnswer(
+      'the interview question shown in the uploaded screenshot',
+      style,
+      session.targetRole
+    );
+    const answer: SessionAnswer = {
+      id: makeId('ans'),
+      sessionId,
+      questionText: 'Question captured from screenshot / photo',
+      category: 'technical',
+      answerText: composed.text,
+      answerStyle: style,
+      starBreakdown: composed.star,
+      groundingSources: ['Screenshot (read locally in demo mode)'],
+      confidenceScore: 0.9,
+      saved: false,
+      createdAt: now(),
+    };
+    s.answers[sessionId] = [...(s.answers[sessionId] || []), answer];
+    session.questionsCount = (session.questionsCount || 0) + 1;
+    save();
+    return answer;
+  }
+
+  // ── Mock Interview (AI interviewer) ───────────────────────────────────────
+  if (route === '/api/mock/next-question' && method === 'POST') {
+    const history: { question: string }[] = Array.isArray(body.history) ? body.history : [];
+    const asked = new Set(history.map((h) => String(h.question)));
+    const bank = [
+      { question: 'Walk me through your background and the accomplishment you are most proud of.', category: 'behavioral' },
+      { question: 'Tell me about a time you disagreed with a decision your team made. What did you do?', category: 'behavioral' },
+      { question: 'Describe the hardest bug or incident you have debugged end to end.', category: 'technical' },
+      { question: 'How would you design a rate limiter that works across a fleet of edge servers?', category: 'technical' },
+      { question: 'You need to process 10 million events an hour with exactly-once semantics. Walk me through the design.', category: 'coding' },
+      { question: 'What is the time complexity of your favourite data structure, and when would you not use it?', category: 'coding' },
+      { question: 'Why are you interested in this role, and what would make you decline our offer?', category: 'behavioral' },
+      { question: 'How do you decide between shipping fast and shipping safely when a deadline slips?', category: 'behavioral' },
+      { question: 'Explain eventual consistency to a product manager, then to a staff engineer.', category: 'technical' },
+      { question: 'What metrics would you instrument to know a feature launch succeeded?', category: 'technical' },
+      { question: 'Tell me about feedback that stung. How did you respond to it?', category: 'behavioral' },
+      { question: 'Design a URL shortener: storage, scale, and the trade-offs you would call out in review.', category: 'coding' },
+    ];
+    const round = history.length + 1;
+    const unseen = bank.filter((b) => !asked.has(b.question));
+    const pool = unseen.length > 0 ? unseen : bank;
+    const pick = pool[(round * 5 + String(body.role || '').length) % pool.length];
+    return { question: pick.question, category: pick.category, round };
+  }
+
+  if (route === '/api/mock/evaluate' && method === 'POST') {
+    const answer = String(body.answer || '').trim();
+    const question = String(body.question || '').trim();
+    const role = String(body.role || 'the role');
+    const wordCount = answer ? answer.split(/\s+/).length : 0;
+    // Local heuristic score: reward structure and concrete detail, penalise brevity.
+    const score = Math.max(35, Math.min(96, 45 + Math.min(wordCount, 180) * 0.3 + (answer.includes('because') ? 6 : 0)));
+    return {
+      score: Math.round(score),
+      verdict:
+        wordCount < 40
+          ? 'Too thin — expand with context and a measurable result.'
+          : score >= 80
+            ? 'Strong answer: structured, specific, and credible.'
+            : 'Solid base — add one quantified outcome to make it stick.',
+      strengths: [
+        'Directly addresses the question without rambling',
+        'Clear structure the interviewer can follow',
+        wordCount >= 80 ? 'Enough detail to be credible' : 'Concise enough to hold attention',
+      ],
+      improvements: [
+        'Open with the context in one sentence before the detail',
+        'Quantify the result (%, time saved, users affected)',
+        'Close with what you learned or would do differently',
+      ],
+      improvedAnswer: `Situation and stakes first: in one sentence, set the scene for "${question.slice(0, 80)}". Then your actions, then the measurable result, then the lesson. As ${role}, anchor every claim in something you actually shipped.`,
+      followUpHint: 'Interviewers often follow up with "what would you do differently?" — have that answer ready.',
+    };
   }
 
   if (route === '/api/notes/generate' && method === 'POST') {

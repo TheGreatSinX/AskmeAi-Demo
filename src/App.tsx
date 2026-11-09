@@ -12,6 +12,8 @@ import { DesktopHUD } from './components/DesktopHUD';
 import { ElectronGuideModal } from './components/ElectronGuideModal';
 import { DashboardView } from './views/DashboardView';
 import { LiveStudioView } from './views/LiveStudioView';
+import { MockInterviewView } from './views/MockInterviewView';
+import { BillingView } from './views/BillingView';
 import { CodingSandboxView } from './views/CodingSandboxView';
 import { ResumeVaultView } from './views/ResumeVaultView';
 import { KnowledgeBaseView } from './views/KnowledgeBaseView';
@@ -70,11 +72,13 @@ const MainContent: React.FC = () => {
       <main className="flex-1 px-4 lg:px-8 py-6">
         {activeTab === 'dashboard' && <DashboardView />}
         {activeTab === 'studio' && <LiveStudioView />}
+        {activeTab === 'mock' && <MockInterviewView />}
         {activeTab === 'coding' && <CodingSandboxView />}
         {activeTab === 'vault' && <ResumeVaultView />}
         {activeTab === 'knowledge' && <KnowledgeBaseView />}
         {activeTab === 'notes' && <NotesView />}
-        {(activeTab === 'billing' || activeTab === 'opensource') && <OpenSourceView />}
+        {activeTab === 'billing' && <BillingView />}
+        {activeTab === 'opensource' && <OpenSourceView />}
         {activeTab === 'admin' && <AdminView />}
       </main>
 

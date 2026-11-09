@@ -19,6 +19,7 @@ import {
   Laptop,
   Heart,
   LogOut,
+  Bot,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -112,6 +113,18 @@ export const Navbar: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('mock')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+              activeTab === 'mock'
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Bot className="h-3.5 w-3.5" />
+            Mock Interview
+          </button>
+
+          <button
             onClick={() => setActiveTab('coding')}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
               activeTab === 'coding'
@@ -157,6 +170,18 @@ export const Navbar: React.FC = () => {
           >
             <ClipboardList className="h-3.5 w-3.5" />
             AI Notes
+          </button>
+
+          <button
+            onClick={() => setActiveTab('billing')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+              activeTab === 'billing'
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <CreditCard className="h-3.5 w-3.5" />
+            Billing
           </button>
 
           <button
@@ -258,10 +283,12 @@ export const Navbar: React.FC = () => {
         {[
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'studio', label: 'Live Studio', icon: Mic },
+          { id: 'mock', label: 'Mock', icon: Bot },
           { id: 'coding', label: 'Coding', icon: Code2 },
           { id: 'vault', label: 'Resumes', icon: FileText },
           { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
           { id: 'notes', label: 'Notes', icon: ClipboardList },
+          { id: 'billing', label: 'Billing', icon: CreditCard },
           { id: 'opensource', label: 'Open Source', icon: Heart },
           ...(user?.role === 'super_admin' ? [{ id: 'admin', label: 'Admin', icon: Shield }] : []),
         ].map((item) => {

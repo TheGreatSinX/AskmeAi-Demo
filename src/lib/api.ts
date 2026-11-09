@@ -205,6 +205,9 @@ export const api = {
     targetRole: string;
     targetCompany: string;
     resumeId?: string;
+    mode?: 'interview' | 'meeting';
+    instructions?: string;
+    language?: string;
   }): Promise<InterviewSession> {
     return json('/api/sessions/create', post('/api/sessions/create', data), 'Failed to create session');
   },
@@ -256,6 +259,46 @@ export const api = {
   // Notes
   async generateNotes(sessionId: string): Promise<SessionNotes> {
     return json('/api/notes/generate', post('/api/notes/generate', { sessionId }), 'Failed to generate notes');
+  },
+
+  // Screenshot / photo of a question -> grounded answer (multimodal)
+  async answerFromImage(
+    sessionId: string,
+    data: { imageBase64: string; mimeType?: string; answerStyle?: string; customHint?: string }
+  ): Promise<SessionAnswer> {
+    return json(
+      `/api/sessions/${sessionId}/answer-from-image`,
+      post(`/api/sessions/${sessionId}/answer-from-image`, data),
+      'Failed to answer from image'
+    );
+  },
+
+  // Mock Interview (stateless AI interviewer)
+  async mockNextQuestion(data: {
+    role: string;
+    company?: string;
+    difficulty?: string;
+    language?: string;
+    history?: { question: string; score?: number }[];
+  }): Promise<{ question: string; category: string; round: number }> {
+    return json('/api/mock/next-question', post('/api/mock/next-question', data), 'Failed to fetch question');
+  },
+
+  async mockEvaluate(data: {
+    question: string;
+    answer: string;
+    role: string;
+    company?: string;
+    language?: string;
+  }): Promise<{
+    score: number;
+    verdict: string;
+    strengths: string[];
+    improvements: string[];
+    improvedAnswer: string;
+    followUpHint: string;
+  }> {
+    return json('/api/mock/evaluate', post('/api/mock/evaluate', data), 'Failed to evaluate answer');
   },
 
   // Admin

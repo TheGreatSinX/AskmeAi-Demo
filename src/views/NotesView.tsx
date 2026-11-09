@@ -14,6 +14,7 @@ import {
   FileText,
   Printer,
   ChevronRight,
+  ListChecks,
 } from 'lucide-react';
 import { InterviewSession, SessionNotes, SessionAnswer, TranscriptLine } from '../types';
 
@@ -59,6 +60,9 @@ ${n.executiveSummary}
 
 ## Key Topics Discussed
 ${n.keyTopicsDiscussed.map((t) => `- ${t}`).join('\n')}
+
+## Action Items
+${n.actionItems.map((t) => `- [ ] ${t}`).join('\n')}
 
 ## Strengths
 ${n.candidateStrengths.map((st) => `- ${st}`).join('\n')}
@@ -237,6 +241,25 @@ ${n.thankYouEmailDraft}
                       ))}
                     </div>
                   </div>
+
+                  {/* Action Items */}
+                  {sessionData.notes.actionItems.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-slate-950/80 border border-cyan-500/25 space-y-2">
+                      <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                        <ListChecks className="h-4 w-4" /> Action Items Before Your Next Round
+                      </span>
+                      <ul className="space-y-1.5">
+                        {sessionData.notes.actionItems.map((item, i) => (
+                          <li key={i} className="flex items-start gap-2 text-xs text-slate-300 leading-relaxed">
+                            <span className="mt-0.5 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded border border-cyan-500/60 text-[9px] text-cyan-400">
+                              {i + 1}
+                            </span>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {/* Questions & Grounded Answers Log */}
                   <div className="space-y-3">

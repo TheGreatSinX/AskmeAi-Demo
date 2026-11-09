@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { api } from '../lib/api';
 import { AudioVisualizer } from '../components/AudioVisualizer';
+import { AnswerBody } from '../components/MermaidDiagram';
 import {
   Mic,
   MicOff,
@@ -25,8 +26,10 @@ import {
   Laptop,
   CheckCircle2,
   Heart,
+  Camera,
+  Image as ImageIcon,
 } from 'lucide-react';
-import { SessionAnswer } from '../types';
+import { AnswerStyle, SessionAnswer } from '../types';
 
 export const LiveStudioView: React.FC = () => {
   const {
@@ -45,16 +48,18 @@ export const LiveStudioView: React.FC = () => {
     openHUD,
   } = useApp();
 
-  const [answerStyle, setAnswerStyle] = useState<'star' | 'concise' | 'technical' | 'step_by_step'>('star');
+  const [answerStyle, setAnswerStyle] = useState<AnswerStyle>('star');
   const [manualInput, setManualInput] = useState('');
   const [customHint, setCustomHint] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<SessionAnswer | null>(null);
 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll transcripts
   useEffect(() => {
@@ -138,6 +143,100 @@ export const LiveStudioView: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // ── Screenshot / photo of a question -> grounded answer (ParakeetAI) ──────
+  /** Downscale to max 1600px wide JPEG so payloads stay small on every path. */
+  const toJpegDataUrl = (source: HTMLImageElement | HTMLVideoElement): string => {
+    const w = (source as HTMLVideoElement).videoWidth || (source as HTMLImageElement).naturalWidth;
+    const h = (source as HTMLVideoElement).videoHeight || (source as HTMLImageElement).naturalHeight;
+    const scale = Math.min(1, 1600 / Math.max(1, w));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(w * scale));
+    canvas.height = Math.max(1, Math.round(h * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    ctx.drawImage(source as any, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  };
+
+  const sendImageForAnswer = async (dataUrl: string) => {
+    if (!activeSession || !dataUrl) return;
+    const base64 = dataUrl.split(',')[1] || '';
+    if (!base64) {
+      showToast('Could not read that image', 'error');
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const answer = await api.answerFromImage(activeSession.id, {
+        imageBase64: base64,
+        mimeType: 'image/jpeg',
+        answerStyle,
+        customHint: customHint || undefined,
+      });
+      addLiveAnswer(answer);
+      setSelectedAnswer(answer);
+      showToast('Question read from image — answer formulated!', 'success');
+    } catch (e: any) {
+      showToast(e.message || 'Image answer failed', 'error');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Please choose an image file', 'error');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const dataUrl = toJpegDataUrl(img);
+      URL.revokeObjectURL(url);
+      void sendImageForAnswer(dataUrl);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      showToast('Could not load that image', 'error');
+    };
+    img.src = url;
+  };
+
+  const handleScreenCapture = async () => {
+    if (!activeSession) {
+      showToast('Please launch a session first', 'error');
+      return;
+    }
+    setIsCapturing(true);
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.muted = true;
+      await video.play();
+      // Give the compositor a moment so the first frame is actually painted.
+      await new Promise((r) => setTimeout(r, 400));
+      const dataUrl = toJpegDataUrl(video);
+      stream.getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
+      if (!dataUrl) {
+        showToast('Capture failed — try the photo upload instead', 'error');
+        return;
+      }
+      await sendImageForAnswer(dataUrl);
+    } catch (err: any) {
+      if (err?.name !== 'NotAllowedError') {
+        console.warn('Screen capture error:', err);
+      }
+      showToast('Screen capture cancelled', 'info');
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
   // Sample prompt simulator for testing when user is in silent environment
   const simulateInterviewQuestion = async (sampleQuestion: string) => {
     if (!activeSession) {
@@ -198,8 +297,18 @@ export const LiveStudioView: React.FC = () => {
                 <Clock className="h-3 w-3" /> {formatTimer(elapsedSeconds)}
               </span>
               <span>•</span>
-              <span className="text-emerald-400 font-medium flex items-center gap-1">
-                <Heart className="h-3 w-3 fill-emerald-400" /> Open Source • Unlimited
+              <span
+                title="Credit balance"
+                className="flex items-center gap-1 font-mono text-amber-300 font-semibold"
+              >
+                <Zap className="h-3 w-3 fill-amber-300" /> {wallet?.balanceCredits ?? '—'} cr
+              </span>
+              <span className="hidden sm:inline">•</span>
+              <span className="hidden sm:inline px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-semibold uppercase">
+                {activeSession.mode === 'meeting' ? 'Regular Meeting' : 'Interview'}
+              </span>
+              <span className="hidden sm:inline px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono">
+                {activeSession.language || 'en-US'}
               </span>
             </div>
           </div>
@@ -363,23 +472,58 @@ export const LiveStudioView: React.FC = () => {
             <div ref={transcriptEndRef} />
           </div>
 
-          {/* Manual Input Footer */}
-          <form onSubmit={handleManualAsk} className="pt-3 border-t border-slate-800 flex items-center gap-2">
-            <input
-              type="text"
-              value={manualInput}
-              onChange={(e) => setManualInput(e.target.value)}
-              placeholder="Quietly type or paste interviewer question..."
-              className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
-            />
-            <button
-              type="submit"
-              disabled={isGenerating || !manualInput.trim()}
-              className="p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold disabled:opacity-40 transition-colors"
-            >
-              <Send className="h-4 w-4" />
-            </button>
-          </form>
+          {/* Manual Input Footer + Screenshot Answer */}
+          <div className="pt-3 border-t border-slate-800 space-y-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleScreenCapture}
+                disabled={isGenerating || isCapturing}
+                title="Capture a screen with the question, get an answer"
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-medium transition-colors disabled:opacity-50"
+              >
+                <Camera className="h-3.5 w-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">{isCapturing ? 'Capturing…' : 'Screenshot'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={isGenerating}
+                title="Upload a photo of the question"
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-medium transition-colors disabled:opacity-50"
+              >
+                <ImageIcon className="h-3.5 w-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Photo</span>
+              </button>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+              <span className="text-[10px] text-slate-500 hidden md:inline">
+                Screenshot or photo of a question → grounded answer
+              </span>
+            </div>
+
+            <form onSubmit={handleManualAsk} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={manualInput}
+                onChange={(e) => setManualInput(e.target.value)}
+                placeholder="Quietly type or paste interviewer question..."
+                className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={isGenerating || !manualInput.trim()}
+                className="p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold disabled:opacity-40 transition-colors"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Right Column: AI Answer Engine & STAR Breakdown (7 Cols) */}
@@ -393,12 +537,14 @@ export const LiveStudioView: React.FC = () => {
               <h2 className="text-sm font-bold text-white">AI Grounded Talking Points</h2>
             </div>
 
-            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
               {[
                 { id: 'star', label: 'STAR Format' },
                 { id: 'concise', label: 'Concise Pitch' },
                 { id: 'technical', label: 'Deep Technical' },
                 { id: 'step_by_step', label: 'Step-by-Step' },
+                { id: 'bullets', label: 'Bullets' },
+                { id: 'full_script', label: 'Full Script' },
               ].map((style) => (
                 <button
                   key={style.id}
@@ -503,9 +649,10 @@ export const LiveStudioView: React.FC = () => {
                   <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
                     Full Recommended Speech Response:
                   </span>
-                  <div className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 text-sm text-slate-100 leading-relaxed whitespace-pre-line font-normal selection:bg-emerald-500/40">
-                    {selectedAnswer.answerText}
-                  </div>
+                  <AnswerBody
+                    text={selectedAnswer.answerText}
+                    className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 text-sm text-slate-100 leading-relaxed whitespace-pre-line font-normal selection:bg-emerald-500/40"
+                  />
                 </div>
 
                 {/* Grounding Attribution */}

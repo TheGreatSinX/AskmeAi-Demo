@@ -14,13 +14,16 @@ import {
   AlertTriangle,
   Cpu,
   RefreshCw,
+  Code2,
+  Laptop,
+  Plus,
 } from 'lucide-react';
 import { AuditLog, AdminSettings, EnrolledUser, UserRole } from '../types';
 
 export const AdminView: React.FC = () => {
-  const { user, showToast } = useApp();
+  const { user, showToast, setActiveTab, setElectronGuideOpen } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'users' | 'settings' | 'audits'>('users');
+  const [activeAdminTab, setAdminTab] = useState<'users' | 'settings' | 'audits'>('users');
   const [usersList, setUsersList] = useState<any[]>([]);
   const [enrolledUsers, setEnrolledUsers] = useState<EnrolledUser[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -40,9 +43,7 @@ export const AdminView: React.FC = () => {
 
   useEffect(() => {
     loadAdminData();
-  }, []);
-
-  const loadAdminData = async () => {
+  }, []);  const loadAdminData = async () => {
     try {
       const [u, e, a, s, o] = await Promise.all([
         api.getAdminUsers(),
@@ -97,7 +98,7 @@ export const AdminView: React.FC = () => {
     setIsInviting(true);
     try {
       await api.inviteEnrolledUser(inviteEmail.trim(), inviteRole);
-      showToast(`Invited ${inviteEmail} (${inviteRole})`, 'success');
+      showToast(`Added ${inviteEmail} (${inviteRole}) — they can sign in with Google`, 'success');
       setInviteEmail('');
       setInviteRole('user');
       await loadAdminData();
@@ -183,12 +184,36 @@ export const AdminView: React.FC = () => {
         </div>
       )}
 
+      {/* Quick Tools: Sandbox & Desktop moved here from the global nav */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+        <div>
+          <p className="micro mb-1">Quick tools</p>
+          <h3 className="text-sm font-semibold text-slate-100">Admin shortcuts</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('coding')}
+            title="Open coding sandbox"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200"
+          >
+            <Code2 className="h-3.5 w-3.5" /> Sandbox
+          </button>
+          <button
+            onClick={() => setElectronGuideOpen(true)}
+            title="Open Electron desktop companion guide"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200"
+          >
+            <Laptop className="h-3.5 w-3.5" /> Desktop
+          </button>
+        </div>
+      </div>
+
       {/* Admin Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
         <button
-          onClick={() => setActiveTab('users')}
+          onClick={() => setAdminTab('users')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            activeTab === 'users'
+            activeAdminTab === 'users'
               ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
               : 'text-slate-400 hover:text-white'
           }`}
@@ -197,9 +222,9 @@ export const AdminView: React.FC = () => {
           User Management ({usersList.length})
         </button>
         <button
-          onClick={() => setActiveTab('settings')}
+          onClick={() => setAdminTab('settings')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            activeTab === 'settings'
+            activeAdminTab === 'settings'
               ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
               : 'text-slate-400 hover:text-white'
           }`}
@@ -208,9 +233,9 @@ export const AdminView: React.FC = () => {
           System & AI Config
         </button>
         <button
-          onClick={() => setActiveTab('audits')}
+          onClick={() => setAdminTab('audits')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            activeTab === 'audits'
+            activeAdminTab === 'audits'
               ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
               : 'text-slate-400 hover:text-white'
           }`}
@@ -221,16 +246,16 @@ export const AdminView: React.FC = () => {
       </div>
 
       {/* Tab: Users Management */}
-      {activeTab === 'users' && (
+      {activeAdminTab === 'users' && (
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-4">
           {/* Invite new member (invitation-only enrolment) */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
             <div>
-              <p className="micro mb-1">Invite member</p>
-              <h3 className="text-sm font-semibold text-slate-100">Add an enrolled account</h3>
+              <p className="micro mb-1">Add user</p>
+              <h3 className="text-sm font-semibold text-slate-100">Invite via Google sign-in</h3>
             </div>
             <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-rose-400">
-              Invitation only · max two enrolled accounts
+              Google sign-in only · max two enrolled accounts
             </span>
           </div>
 
@@ -262,7 +287,7 @@ export const AdminView: React.FC = () => {
                 disabled={isInviting || !inviteEmail.trim()}
                 className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isInviting ? 'Inviting…' : 'Invite'}
+                {isInviting ? 'Adding…' : 'Add User'}
               </button>
             </div>
           </form>
@@ -368,7 +393,7 @@ export const AdminView: React.FC = () => {
       )}
 
       {/* Tab: System & AI Config */}
-      {activeTab === 'settings' && settings && (
+      {activeAdminTab === 'settings' && settings && (
         <form onSubmit={handleSaveSettings} className="rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-5 max-w-2xl">
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <Cpu className="h-4 w-4 text-purple-400" /> Model Selection & Token Controls
@@ -437,7 +462,7 @@ export const AdminView: React.FC = () => {
       )}
 
       {/* Tab: Audit Logs */}
-      {activeTab === 'audits' && (
+      {activeAdminTab === 'audits' && (
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-4">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">

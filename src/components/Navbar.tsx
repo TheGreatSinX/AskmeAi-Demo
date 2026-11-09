@@ -13,19 +13,16 @@ import {
   LayoutDashboard,
   AppWindow,
   Radio,
-  Laptop,
   Heart,
   LogOut,
   Bot,
 } from 'lucide-react';
-
 type TabDef = { id: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
 const DESKTOP_TABS: TabDef[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'studio', label: 'Live Studio', icon: Mic },
   { id: 'mock', label: 'Mock', icon: Bot },
-  { id: 'coding', label: 'Sandbox', icon: Code2 },
   { id: 'vault', label: 'Resumes', icon: FileText },
   { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
   { id: 'notes', label: 'Notes', icon: ClipboardList },
@@ -62,7 +59,6 @@ export const Navbar: React.FC = () => {
     startListening,
     stopListening,
     openHUD,
-    setElectronGuideOpen,
   } = useApp();
   const { authEnabled, demoMode, signOut } = useAuth();
 
@@ -152,15 +148,6 @@ export const Navbar: React.FC = () => {
             <kbd className="hidden 2xl:inline rounded border border-slate-700 bg-slate-800 px-1 py-px text-[9px] font-mono text-slate-500">
               ⌘⇧Space
             </kbd>
-          </button>
-
-          <button
-            onClick={() => setElectronGuideOpen(true)}
-            title="Electron desktop companion for Windows & macOS"
-            className="hidden items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200 sm:flex"
-          >
-            <Laptop className="h-3.5 w-3.5 text-slate-500" />
-            <span className="hidden xl:inline">Desktop</span>
           </button>
 
           {authEnabled && (

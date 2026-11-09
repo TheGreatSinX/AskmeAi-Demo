@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import {
   Mic,
   MicOff,
-  Code2,
   FileText,
   BookOpen,
   ClipboardList,

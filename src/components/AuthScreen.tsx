@@ -45,7 +45,7 @@ const STATS = [
 ];
 
 export const AuthScreen: React.FC = () => {
-  const { authEnabled, configError, demoMode, signInWithGoogle } = useAuth();
+  const { authEnabled, configError, signInWithGoogle } = useAuth();
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -192,13 +192,6 @@ export const AuthScreen: React.FC = () => {
             )}
             Continue with Google
           </button>
-
-          {demoMode && (
-            <p className="mt-4 rounded-lg border border-slate-800 bg-slate-950 px-3.5 py-3 font-mono text-[10.5px] leading-relaxed text-slate-500">
-              NO API ON THIS ORIGIN — ADD <span className="text-amber-400">?DEMO=1</span> TO THE URL TO EXPLORE THE
-              IN-BROWSER SAMPLE DATA.
-            </p>
-          )}
 
           <div className="mt-10 flex items-start gap-2.5 border-t border-slate-800 pt-5 text-[11.5px] leading-relaxed text-slate-500">
             <ShieldCheck className="mt-px h-3.5 w-3.5 flex-shrink-0 text-slate-600" />

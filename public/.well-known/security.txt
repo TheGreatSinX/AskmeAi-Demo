@@ -1,0 +1,11 @@
+# AskMeAi Interview Copilot - Security Policy
+# https://askmeai-demo.thegreatsinx.workers.dev/.well-known/security.txt
+
+Contact: mailto:security@askmeai-demo.thegreatsinx.workers.dev
+Policy: https://askmeai-demo.thegreatsinx.workers.dev/OWASP_TOP_10_REPORT.md
+Preferred-Languages: en
+Canonical: https://askmeai-demo.thegreatsinx.workers.dev/.well-known/security.txt
+Hiring: https://askmeai-demo.thegreatsinx.workers.dev
+
+# Acknowledgments
+Acknowledgment: https://askmeai-demo.thegreatsinx.workers.dev/OWASP_TOP_10_REPORT.md

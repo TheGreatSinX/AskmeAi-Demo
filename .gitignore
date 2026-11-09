@@ -1,14 +1,29 @@
-node_modules/
-build/
-dist/
-coverage/
-.DS_Store
-*.log
-.env*
-!.env.example
+# Local database (regenerated on server start)
+data/database.json
 
-# Firebase credentials — never commit these
-serviceAccount*.json
-*-service-account.json
-firebase-adminsdk*.json
-.firebase/
+# Environment variables (may contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Dependency directories
+node_modules/
+
+# Build output
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

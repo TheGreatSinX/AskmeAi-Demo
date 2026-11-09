@@ -1,0 +1,23 @@
+# AskMeAi Interview Copilot - Robots.txt
+# https://askmeai-demo.thegreatsinx.workers.dev/robots.txt
+
+User-agent: *
+Allow: /
+
+# Disallow sensitive admin and API paths
+Disallow: /api/admin/
+Disallow: /api/auth/
+Disallow: /api/wallet/
+Disallow: /api/sessions/
+Disallow: /api/transcribe
+Disallow: /api/mock/
+Disallow: /api/coding/
+Disallow: /api/notes/
+
+# Allow public-facing pages
+Allow: /
+Allow: /dashboard
+Allow: /studio
+
+# Sitemap
+Sitemap: https://askmeai-demo.thegreatsinx.workers.dev/sitemap.xml

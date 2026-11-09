@@ -9,6 +9,7 @@ import {
   UserDevice,
   TranscriptLine,
   SessionAnswer,
+  AnswerStyle,
 } from '../types';
 import { api } from '../lib/api';
 
@@ -73,8 +74,19 @@ interface AppContextType {
     targetRole: string,
     targetCompany: string,
     resumeId?: string,
-    options?: { mode?: 'interview' | 'meeting'; instructions?: string; language?: string }
+    options?: {
+      mode?: 'interview' | 'meeting';
+      instructions?: string;
+      language?: string;
+      /** Wizard preferences (ParakeetAI parity) */
+      answerStyle?: AnswerStyle;
+      autoAnswer?: boolean;
+      saveTranscript?: boolean;
+      model?: string;
+    }
   ) => Promise<InterviewSession>;
+  /** Configured AI model ids (primary first) for the create-session wizard. */
+  aiModels: string[];
   endSession: (sessionId: string) => Promise<void>;
   // Live transcripts and answers cache
   liveTranscripts: TranscriptLine[];
@@ -106,6 +118,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [aiModels, setAiModels] = useState<string[]>([]);
 
   // HUD and modal states
   const [hudOpen, setHudOpen] = useState<boolean>(false);
@@ -157,6 +170,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setResumes(data.resumes);
       setDocuments(data.documents);
       setSessions(data.sessions);
+      setAiModels(data.aiModels || []);
 
       // If active session exists, retain or load
       const current = activeSessionRef.current;
@@ -274,16 +288,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   const line = await api.submitTranscript(activeSession.id, 'interviewer', text);
                   setLiveTranscripts((prev) => [...prev, line]);
 
-                  // If question detected with high confidence, auto-trigger answer generation!
+                  // Question detected with high confidence -> honour the session's
+                  // Auto Answer preference (off = Live Studio offers a manual Answer).
                   if (line.isQuestion && line.confidence > 0.75) {
-                    showToast(`Detected Interviewer Question (${Math.round(line.confidence * 100)}% match)`, 'info');
-                    api
-                      .generateAnswer(activeSession.id, line.text, 'star')
-                      .then((ans) => {
-                        setLiveAnswers((prev) => [ans, ...prev]);
-                        showToast('New STAR Answer Formulated', 'success');
-                      })
-                      .catch((err) => console.error('Auto-answer error:', err));
+                    const confidence = Math.round(line.confidence * 100);
+                    if (activeSession.autoAnswer === false) {
+                      showToast(`Question detected (${confidence}% match) — auto-answer is off`, 'info');
+                    } else {
+                      const style = activeSession.answerStyle || 'star';
+                      showToast(`Detected Interviewer Question (${confidence}% match)`, 'info');
+                      api
+                        .generateAnswer(activeSession.id, line.text, style)
+                        .then((ans) => {
+                          setLiveAnswers((prev) => [ans, ...prev]);
+                          showToast(
+                            style === 'star' ? 'New STAR Answer Formulated' : 'New Answer Formulated',
+                            'success'
+                          );
+                        })
+                        .catch((err) => console.error('Auto-answer error:', err));
+                    }
                   }
                 } catch (e) {
                   console.error('Transcript error:', e);
@@ -415,7 +439,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     targetRole: string,
     targetCompany: string,
     resumeId?: string,
-    options?: { mode?: 'interview' | 'meeting'; instructions?: string; language?: string }
+    options?: {
+      mode?: 'interview' | 'meeting';
+      instructions?: string;
+      language?: string;
+      answerStyle?: AnswerStyle;
+      autoAnswer?: boolean;
+      saveTranscript?: boolean;
+      model?: string;
+    }
   ) => {
     const session = await api.createSession({
       targetRole,
@@ -424,6 +456,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mode: options?.mode,
       instructions: options?.instructions,
       language: options?.language,
+      answerStyle: options?.answerStyle,
+      autoAnswer: options?.autoAnswer,
+      saveTranscript: options?.saveTranscript,
+      model: options?.model,
     });
     setActiveSession(session);
     setLiveTranscripts([]);
@@ -497,6 +533,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setRefillModalOpen,
         setElectronGuideOpen,
         startNewSession,
+        aiModels,
         endSession,
         liveTranscripts,
         liveAnswers,

@@ -65,6 +65,19 @@ async function safeGenerateContent(params: any, timeoutMs = 30000): Promise<any>
   return null;
 }
 
+/** Answer formats the create-session wizard and generate-answer accept. */
+const ALLOWED_ANSWER_STYLES = ['star', 'concise', 'technical', 'step_by_step', 'bullets', 'full_script'] as const;
+type AnswerStyleId = (typeof ALLOWED_ANSWER_STYLES)[number];
+
+/**
+ * The model a session requested, re-validated against the live pool on every
+ * use (env may change between deploys; unknown ids fall back to the primary),
+ * so the wizard's "Select model" row is a real preference, not decoration.
+ */
+function sessionModel(session: { model?: string }): string {
+  return session.model && gemini.models.includes(session.model) ? session.model : PRIMARY_MODEL;
+}
+
 // ---------------------------------------------------------------------------
 // Authentication
 // ---------------------------------------------------------------------------
@@ -219,6 +232,8 @@ app.get('/api/me', async (req: AuthedRequest, res: Response) => {
     resumes,
     documents,
     sessions,
+    // Real configured model pool (primary first) for the session wizard.
+    aiModels: gemini.models,
   });
 });
 
@@ -450,7 +465,18 @@ app.get('/api/sessions', async (req: AuthedRequest, res: Response) => {
 
 app.post('/api/sessions/create', async (req: AuthedRequest, res: Response) => {
   const uid = req.auth!.uid;
-  const { targetRole, targetCompany, resumeId, mode, instructions, language } = req.body;
+  const {
+    targetRole,
+    targetCompany,
+    resumeId,
+    mode,
+    instructions,
+    language,
+    answerStyle,
+    autoAnswer,
+    saveTranscript,
+    model,
+  } = req.body;
   const resumes = await db.getResumes(uid);
   const selectedResume =
     resumes.find((r) => r.id === resumeId) || resumes.find((r) => r.isPrimary);
@@ -471,6 +497,13 @@ app.post('/api/sessions/create', async (req: AuthedRequest, res: Response) => {
     mode: mode === 'meeting' ? 'meeting' : 'interview',
     instructions: typeof instructions === 'string' ? instructions.slice(0, 20000) : undefined,
     language: typeof language === 'string' && language.trim() ? language.trim().slice(0, 20) : 'en-US',
+    // Create-session wizard preferences
+    answerStyle: ALLOWED_ANSWER_STYLES.includes(answerStyle) ? answerStyle : 'star',
+    autoAnswer: typeof autoAnswer === 'boolean' ? autoAnswer : true,
+    saveTranscript: typeof saveTranscript === 'boolean' ? saveTranscript : true,
+    // Requested model id — re-validated against the live pool on every use.
+    model:
+      typeof model === 'string' && /^[a-z0-9][a-z0-9.-]{1,59}$/i.test(model) ? model : undefined,
   });
 
   res.json(session);
@@ -604,7 +637,11 @@ Respond ONLY with valid JSON:
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     };
 
-    await db.addTranscriptLine(session.id, line);
+    // "Save transcript" off = the line is returned for the live view but never
+    // persisted (consent-sensitive capture stays in memory for this session).
+    if (session.saveTranscript !== false) {
+      await db.addTranscriptLine(session.id, line);
+    }
     res.json(line);
   } catch (error: any) {
     console.error('Transcript error:', error);
@@ -616,7 +653,7 @@ Respond ONLY with valid JSON:
 app.post('/api/sessions/:id/generate-answer', async (req: AuthedRequest, res: Response) => {
   try {
     const { questionText, customHint } = req.body;
-    const ALLOWED_STYLES = ['star', 'concise', 'technical', 'step_by_step', 'bullets', 'full_script'] as const;
+    const ALLOWED_STYLES = ALLOWED_ANSWER_STYLES;
     const answerStyle: (typeof ALLOWED_STYLES)[number] = ALLOWED_STYLES.includes(req.body.answerStyle)
       ? req.body.answerStyle
       : 'star';
@@ -691,7 +728,7 @@ Generate the response in JSON format:
 }`;
 
     const answerResponse = await safeGenerateContent({
-      model: PRIMARY_MODEL,
+      model: sessionModel(session),
       contents: prompt,
       config: {
         systemInstruction,
@@ -776,7 +813,7 @@ app.post('/api/sessions/:id/answer-from-image', async (req: AuthedRequest, res: 
 
     const response = await safeGenerateContent(
       {
-        model: PRIMARY_MODEL,
+        model: sessionModel(session),
         contents: {
           parts: [
             { inlineData: { mimeType, data: imageBase64 } },

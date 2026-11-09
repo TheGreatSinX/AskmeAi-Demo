@@ -134,6 +134,14 @@ export interface InterviewSession {
   instructions?: string;
   /** BCP-47 language code for speech recognition and answer language, e.g. 'en-US'. */
   language?: string;
+  /** Session default answer format chosen in the create-session wizard (Live Studio honours it). */
+  answerStyle?: AnswerStyle;
+  /** Auto-generate an answer when a question is detected (default true; off = press Answer). */
+  autoAnswer?: boolean;
+  /** Persist transcript lines to storage. When false, lines stay in memory for this session only. */
+  saveTranscript?: boolean;
+  /** Requested model id from the wizard; server re-validates it against the live pool. */
+  model?: string;
 }
 
 export type SpeakerRole = 'interviewer' | 'candidate';

@@ -262,6 +262,8 @@ export async function demoFetch(path: string, init: RequestInit = {}): Promise<a
       resumes: s.resumes,
       documents: s.documents,
       sessions: s.sessions,
+      // Mirror of the server's configured pool so the wizard offers the same ids.
+      aiModels: ['gemini-3.5-flash', 'gemini-3.6-flash'],
     };
   }
 
@@ -416,6 +418,15 @@ export async function demoFetch(path: string, init: RequestInit = {}): Promise<a
       mode: body.mode === 'meeting' ? 'meeting' : 'interview',
       instructions: String(body.instructions || '').slice(0, 20000) || undefined,
       language: body.language || 'en-US',
+      // Create-session wizard preferences (ParakeetAI parity)
+      answerStyle: ['star', 'concise', 'technical', 'step_by_step', 'bullets', 'full_script'].includes(
+        body.answerStyle
+      )
+        ? body.answerStyle
+        : 'star',
+      autoAnswer: typeof body.autoAnswer === 'boolean' ? body.autoAnswer : true,
+      saveTranscript: typeof body.saveTranscript === 'boolean' ? body.saveTranscript : true,
+      model: typeof body.model === 'string' && body.model ? body.model.slice(0, 60) : undefined,
     };
     s.sessions = [session, ...s.sessions];
     save();
@@ -448,7 +459,7 @@ export async function demoFetch(path: string, init: RequestInit = {}): Promise<a
   const transcriptMatch = route.match(/^\/api\/sessions\/([^/]+)\/transcript$/);
   if (transcriptMatch && method === 'POST') {
     const sessionId = transcriptMatch[1];
-    requireSession(sessionId);
+    const session = requireSession(sessionId);
     if (!body.text) throw new Error('Text required');
     const line: TranscriptLine = {
       id: makeId('line'),
@@ -460,8 +471,11 @@ export async function demoFetch(path: string, init: RequestInit = {}): Promise<a
       category: categoryFor(String(body.text)),
       timestamp: now(),
     };
-    s.transcripts[sessionId] = [...(s.transcripts[sessionId] || []), line];
-    save();
+    // "Save transcript" off = returned for the live view, never persisted.
+    if (session.saveTranscript !== false) {
+      s.transcripts[sessionId] = [...(s.transcripts[sessionId] || []), line];
+      save();
+    }
     return line;
   }
 

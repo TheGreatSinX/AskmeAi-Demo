@@ -74,6 +74,12 @@ export const LiveStudioView: React.FC = () => {
     }
   }, [liveAnswers, selectedAnswer]);
 
+  // The create-session wizard's answer-format preference becomes the studio
+  // default (and the format auto/manual answers are generated in).
+  useEffect(() => {
+    if (activeSession?.answerStyle) setAnswerStyle(activeSession.answerStyle);
+  }, [activeSession?.id, activeSession?.answerStyle]);
+
   const formatTimer = (totalSec: number) => {
     const mins = Math.floor(totalSec / 60);
     const secs = totalSec % 60;
@@ -133,6 +139,22 @@ export const LiveStudioView: React.FC = () => {
     setCopiedId(id);
     showToast('Copied answer to clipboard', 'success');
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  /** Manual trigger shown on detected questions — the "Auto Answer off" path. */
+  const answerQuestionNow = async (text: string) => {
+    if (!activeSession || isGenerating) return;
+    setIsGenerating(true);
+    try {
+      const answer = await api.generateAnswer(activeSession.id, text, answerStyle, customHint || undefined);
+      addLiveAnswer(answer);
+      setSelectedAnswer(answer);
+      showToast('Answer formulated', 'success');
+    } catch (e: any) {
+      showToast(e.message || 'Answer generation failed', 'error');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // ── Screenshot / photo of a question -> grounded answer (ParakeetAI) ──────
@@ -448,12 +470,27 @@ export const LiveStudioView: React.FC = () => {
                   <p className="text-xs leading-relaxed text-slate-300">{t.text}</p>
 
                   {t.isQuestion && (
-                    <div className="mt-2 flex items-center justify-between">
+                    <div className="mt-2 flex items-center justify-between gap-2">
                       <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.1em] text-emerald-400">
                         <Sparkles className="h-2.5 w-2.5" /> Question · {Math.round(t.confidence * 100)}%
                       </span>
-                      <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-slate-600">
-                        {t.category || 'Behavioral'}
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-slate-600">
+                          {t.category || 'Behavioral'}
+                        </span>
+                        {!liveAnswers.some((a) => a.questionText === t.text) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void answerQuestionNow(t.text);
+                            }}
+                            disabled={isGenerating}
+                            title="Generate an answer for this question"
+                            className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:opacity-50"
+                          >
+                            Answer
+                          </button>
+                        )}
                       </span>
                     </div>
                   )}

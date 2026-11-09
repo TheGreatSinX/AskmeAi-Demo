@@ -148,6 +148,8 @@ export const api = {
     resumes: Resume[];
     documents: KnowledgeDocument[];
     sessions: InterviewSession[];
+    /** Configured AI model pool (primary first) — powers the wizard's model row. */
+    aiModels?: string[];
   }> {
     return json(`/api/me${userId ? `?userId=${userId}` : ''}`, {}, 'Failed to load application state');
   },
@@ -208,6 +210,11 @@ export const api = {
     mode?: 'interview' | 'meeting';
     instructions?: string;
     language?: string;
+    /** Wizard preferences (ParakeetAI parity) */
+    answerStyle?: string;
+    autoAnswer?: boolean;
+    saveTranscript?: boolean;
+    model?: string;
   }): Promise<InterviewSession> {
     return json('/api/sessions/create', post('/api/sessions/create', data), 'Failed to create session');
   },

@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { CreateSessionModal } from '../components/CreateSessionModal';
 import {
   Play,
   Clock,
   FileText,
-  BookOpen,
   ArrowRight,
   Shield,
-  Briefcase,
-  Building2,
-  Calendar,
-  Layers,
   ChevronRight,
   Code2,
 } from 'lucide-react';
@@ -25,49 +21,15 @@ export const DashboardView: React.FC = () => {
     sessions,
     activeSession,
     setActiveTab,
-    startNewSession,
-    showToast,
   } = useApp();
 
-  const [targetRole, setTargetRole] = useState('Staff Software Engineer');
-  const [targetCompany, setTargetCompany] = useState('Google Cloud');
-  const [selectedResumeId, setSelectedResumeId] = useState<string>(
-    resumes.find((r) => r.isPrimary)?.id || resumes[0]?.id || ''
-  );
-  const [sessionMode, setSessionMode] = useState<'interview' | 'meeting'>('interview');
-  const [instructions, setInstructions] = useState('');
-  const [language, setLanguage] = useState('en-US');
-  const [isStarting, setIsStarting] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const primaryResume = resumes.find((r) => r.isPrimary) || resumes[0];
-
-  const handleStartSession = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!targetRole.trim() || !targetCompany.trim()) {
-      showToast('Please specify target role and company', 'error');
-      return;
-    }
-
-    setIsStarting(true);
-    try {
-      await startNewSession(targetRole, targetCompany, selectedResumeId, {
-        mode: sessionMode,
-        instructions: instructions.trim() || undefined,
-        language,
-      });
-    } catch (e: any) {
-      showToast(e.message || 'Failed to start session', 'error');
-    } finally {
-      setIsStarting(false);
-    }
-  };
 
   const totalPracticeMinutes = Math.round(
     sessions.reduce((acc, s) => acc + (s.totalDurationSeconds || 0), 0) / 60
   );
-
-  const fieldClass =
-    'w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-600 transition-colors focus:border-emerald-500/60 focus:outline-none';
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
@@ -106,13 +68,7 @@ export const DashboardView: React.FC = () => {
                 <Play className="h-3.5 w-3.5" /> Resume live session
               </button>
             ) : (
-              <button
-                onClick={() => {
-                  const el = document.getElementById('start-session-card');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="btn btn-primary"
-              >
+              <button onClick={() => setCreateOpen(true)} className="btn btn-primary">
                 <Play className="h-3.5 w-3.5" /> Start new session
               </button>
             )}
@@ -181,163 +137,43 @@ export const DashboardView: React.FC = () => {
 
       {/* Launch form + resume highlights */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Configure & launch */}
+        {/* New-session CTA — the wizard opens as the Create session modal */}
         <div id="start-session-card" className="panel space-y-5 p-6 lg:col-span-2 lg:p-7">
           <div className="flex items-center justify-between border-b border-slate-800 pb-4">
             <div>
               <p className="micro mb-1.5">Session builder</p>
-              <h2 className="text-base font-semibold text-slate-100">Configure & launch copilot</h2>
+              <h2 className="text-base font-semibold text-slate-100">Create interview session</h2>
               <p className="mt-0.5 text-xs text-slate-500">
-                Tailors real-time answer suggestions to your target company
+                Details and preferences in one two-step wizard — nothing to configure twice
               </p>
             </div>
             <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-slate-500">Free · Unlimited</span>
           </div>
 
-          <form onSubmit={handleStartSession} className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="micro flex items-center gap-1.5" htmlFor="target-company">
-                  <Building2 className="h-3 w-3" /> Target company
-                </label>
-                <input
-                  id="target-company"
-                  type="text"
-                  value={targetCompany}
-                  onChange={(e) => setTargetCompany(e.target.value)}
-                  placeholder="e.g. Google, Stripe, Meta, OpenAI"
-                  className={fieldClass}
-                  required
-                />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {[
+              { label: 'Details', body: 'Target role & company, grounding resume, interview or meeting.' },
+              { label: 'Preferences', body: 'Call language, model, answer format, standing AI instructions.' },
+              { label: 'Auto Answer', body: 'Instant answers on detected questions — off means you press Answer.' },
+              { label: 'Save transcript', body: 'You decide whether transcript lines are persisted (consent).' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border border-slate-800 bg-slate-950 p-3.5">
+                <p className="micro mb-1.5">{item.label}</p>
+                <p className="text-xs leading-relaxed text-slate-500">{item.body}</p>
               </div>
+            ))}
+          </div>
 
-              <div className="space-y-1.5">
-                <label className="micro flex items-center gap-1.5" htmlFor="target-role">
-                  <Briefcase className="h-3 w-3" /> Target role
-                </label>
-                <input
-                  id="target-role"
-                  type="text"
-                  value={targetRole}
-                  onChange={(e) => setTargetRole(e.target.value)}
-                  placeholder="e.g. Staff Software Engineer, Tech Lead"
-                  className={fieldClass}
-                  required
-                />
-              </div>
-            </div>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3.5 py-3 text-xs leading-relaxed text-slate-500">
+            <Shield className="h-4 w-4 flex-shrink-0 text-slate-600" />
+            <span>
+              Answers are grounded strictly in your verified experiences. Never fabricates credentials or employers.
+            </span>
+          </div>
 
-            <div className="space-y-1.5">
-              <label className="micro flex items-center gap-1.5" htmlFor="grounding-resume">
-                <FileText className="h-3 w-3" /> Grounding resume
-              </label>
-              <select
-                id="grounding-resume"
-                value={selectedResumeId}
-                onChange={(e) => setSelectedResumeId(e.target.value)}
-                className={fieldClass}
-              >
-                {resumes.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.fileName} {r.isPrimary ? '(Primary Profile)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {/* Session mode: interview vs regular call (ParakeetAI parity) */}
-              <div className="space-y-1.5">
-                <label className="micro flex items-center gap-1.5">
-                  <Layers className="h-3 w-3" /> Session mode
-                </label>
-                <div className="flex gap-2">
-                  {(
-                    [
-                      { id: 'interview', label: 'Interview' },
-                      { id: 'meeting', label: 'Regular meeting' },
-                    ] as const
-                  ).map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setSessionMode(m.id)}
-                      aria-pressed={sessionMode === m.id}
-                      className={`flex-1 rounded-lg border px-3 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.08em] transition-colors ${
-                        sessionMode === m.id
-                          ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
-                          : 'border-slate-800 bg-slate-950 text-slate-500 hover:text-slate-300'
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Language for speech recognition + answers */}
-              <div className="space-y-1.5">
-                <label className="micro flex items-center gap-1.5" htmlFor="interview-language">
-                  <Calendar className="h-3 w-3" /> Interview language
-                </label>
-                <select
-                  id="interview-language"
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className={fieldClass}
-                >
-                  <option value="en-US">English</option>
-                  <option value="es-ES">Español (Spanish)</option>
-                  <option value="fr-FR">Français (French)</option>
-                  <option value="de-DE">Deutsch (German)</option>
-                  <option value="pt-BR">Português (Portuguese)</option>
-                  <option value="hi-IN">हिन्दी (Hindi)</option>
-                  <option value="ja-JP">日本語 (Japanese)</option>
-                  <option value="ko-KR">한국어 (Korean)</option>
-                  <option value="zh-CN">中文 (Chinese)</option>
-                  <option value="ar-SA">العربية (Arabic)</option>
-                  <option value="it-IT">Italiano (Italian)</option>
-                  <option value="id-ID">Bahasa Indonesia</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Standing instructions for every answer (ParakeetAI Instructions field) */}
-            <div className="space-y-1.5">
-              <label className="micro flex items-center gap-1.5" htmlFor="copilot-instructions">
-                <BookOpen className="h-3 w-3" /> Instructions for the copilot
-                <span className="ml-auto font-mono text-[10px] normal-case tracking-normal text-slate-600">
-                  {instructions.length}/20000
-                </span>
-              </label>
-              <textarea
-                id="copilot-instructions"
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value.slice(0, 20000))}
-                rows={3}
-                placeholder="e.g. Keep answers under 60 seconds. Emphasise distributed systems experience. Use British English. Never mention my current employer."
-                className={`${fieldClass} resize-y`}
-              />
-            </div>
-
-            <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3.5 py-3 text-xs leading-relaxed text-slate-500">
-              <Shield className="h-4 w-4 flex-shrink-0 text-slate-600" />
-              <span>
-                Answers are grounded strictly in your verified experiences. Never fabricates credentials or employers.
-              </span>
-            </div>
-
-            <button type="submit" disabled={isStarting} className="btn btn-primary w-full">
-              {isStarting ? (
-                <span>Initializing real-time audio engine…</span>
-              ) : (
-                <>
-                  <Play className="h-3.5 w-3.5" />
-                  <span>Launch live interview studio</span>
-                </>
-              )}
-            </button>
-          </form>
+          <button onClick={() => setCreateOpen(true)} className="btn btn-primary w-full">
+            <Play className="h-3.5 w-3.5" /> Create interview session
+          </button>
         </div>
 
         {/* Resume highlights */}
@@ -481,6 +317,8 @@ export const DashboardView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {createOpen && <CreateSessionModal onClose={() => setCreateOpen(false)} />}
     </div>
   );
 };

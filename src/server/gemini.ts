@@ -121,6 +121,15 @@ class GeminiRouter {
     return this.keys.filter((k) => !k.retired).length;
   }
 
+  /**
+   * Models callers may request, primary first. Exposed so /api/me can offer
+   * the real configured pool in the session wizard instead of hard-coding
+   * model ids in the UI; every request is still validated against this list.
+   */
+  get models(): string[] {
+    return [PRIMARY_MODEL, ...this.fallbackModels.filter((m) => m !== PRIMARY_MODEL)];
+  }
+
   /** Round-robin over usable keys; falls back to the soonest-available key. */
   private pickKey(): KeyState | null {
     const now = Date.now();

@@ -28,6 +28,10 @@ assert.ok(Array.isArray(me.resumes) && me.resumes.length > 0, 'seeded resumes');
 assert.ok(Array.isArray(me.documents) && me.documents.length > 0, 'seeded documents');
 assert.ok(Array.isArray(me.sessions) && me.sessions.length > 0, 'seeded sessions');
 assert.equal(me.user.role, 'super_admin', 'demo user may open admin');
+assert.ok(
+  Array.isArray(me.aiModels) && me.aiModels.length >= 1 && typeof me.aiModels[0] === 'string',
+  'ai model pool exposed to the wizard'
+);
 
 // ── devices ────────────────────────────────────────────────────────────────
 const dev = await post('/api/auth/register-device', { deviceType: 'desktop', deviceName: 'CI probe' });
@@ -48,6 +52,39 @@ assert.equal(session.targetRole, 'Product Manager');
 assert.equal(session.mode, 'meeting', 'session mode persisted');
 assert.equal(session.instructions, 'Keep answers under 60 seconds', 'instructions persisted');
 assert.equal(session.language, 'es-ES', 'language persisted');
+// Wizard defaults when no preferences are sent
+assert.equal(session.answerStyle, 'star', 'answer style defaults to star');
+assert.equal(session.autoAnswer, true, 'auto answer defaults on');
+assert.equal(session.saveTranscript, true, 'save transcript defaults on');
+
+// ── create-session wizard preferences (ParakeetAI parity) ─────────────────
+const prefs = await post('/api/sessions/create', {
+  targetRole: 'Product Designer',
+  targetCompany: 'Ink Corp',
+  answerStyle: 'bullets',
+  autoAnswer: false,
+  saveTranscript: false,
+  model: 'gemini-3.6-flash',
+});
+assert.equal(prefs.answerStyle, 'bullets', 'wizard answer style persisted');
+assert.equal(prefs.autoAnswer, false, 'wizard auto-answer persisted');
+assert.equal(prefs.saveTranscript, false, 'wizard save-transcript persisted');
+assert.equal(prefs.model, 'gemini-3.6-flash', 'wizard model persisted');
+assert.equal(
+  await post('/api/sessions/create', { targetRole: 'X', targetCompany: 'Y', answerStyle: 'nope' })
+    .then((s) => s.answerStyle),
+  'star',
+  'unknown answer style rejected to star'
+);
+
+// saveTranscript=false -> line returned for the live view, never persisted
+const ephemeral = await post(`/api/sessions/${prefs.id}/transcript`, {
+  speaker: 'interviewer',
+  text: 'Which design patterns do you reach for first?',
+});
+assert.ok(ephemeral.id, 'unsaved line still returned for the live stream');
+const prefsData = await get(`/api/sessions/${prefs.id}/data`);
+assert.equal(prefsData.transcripts.length, 0, 'save-transcript off keeps lines out of storage');
 
 const line = await post(`/api/sessions/${session.id}/transcript`, {
   speaker: 'interviewer',

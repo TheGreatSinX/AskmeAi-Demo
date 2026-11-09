@@ -1,0 +1,76 @@
+#!/bin/sh
+# Pre-commit secret scan.
+#
+# Blocks a commit when STAGED content contains actual credential material:
+#   - Google API keys (AIza...)
+#   - Gemini keys (AQ....)
+#   - complete JWTs (header.payload.signature)
+#   - PEM private key blocks
+#   - service-account JSON (type + private_key on one line)
+#   - long base64 blobs (a base64-encoded service account is ~1.5KB)
+#   - any .env file other than the .env.example template
+#
+# Deliberately scans for MATERIAL, not for variable names such as
+# "GEMINI_API_KEYS=..." - documentation must keep working and .env.example
+# is placeholders by design. The PEM needle is assembled from fragments so
+# this script never matches its own patterns.
+#
+# Deliberate bypass:  git commit --no-verify
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+trip=$(mktemp) || exit 0
+trap 'rm -f "$trip"' EXIT
+
+# Assembled at runtime so the full literal never appears on one line here.
+PEM_A='-----BEGIN [A-Z ]*'
+PEM_B='PRIVATE KEY-----'
+
+# .env and friends are never committable; the template .env.example is.
+printf '%s\n' "$staged" | while IFS= read -r file; do
+  base=${file##*/}
+  case "$base" in
+    .env.example) ;;
+    .env|.env.*) printf '%s\n    [dotenv file - never commit]\n' "$file" >>"$trip" ;;
+  esac
+done
+
+# label|regex pairs, read line-by-line so labels may contain spaces.
+while IFS='|' read -r label regex; do
+  [ -z "$label" ] && continue
+  [ "$regex" = "__PEM__" ] && regex="${PEM_A}${PEM_B}"
+
+  printf '%s\n' "$staged" | while IFS= read -r file; do
+    case "$file" in
+      package-lock.json) continue ;;   # integrity hashes are base64
+      .env.example) continue ;;        # placeholder template by design
+    esac
+    # Read the STAGED blob, never the working tree. -I skips binary files and
+    # -e keeps patterns that start with '-' from being parsed as options.
+    # Only line numbers are reported - the match itself is never echoed.
+    lines=$(git show ":$file" 2>/dev/null | grep -I -E -n -e "$regex" | head -3 | cut -d: -f1)
+    [ -z "$lines" ] && continue
+    printf '%s\n    [%s] line(s): %s\n' "$file" "$label" \
+      "$(printf '%s' "$lines" | tr '\n' ' ')" >>"$trip"
+  done
+done <<'PATTERNS'
+Google API key|AIza[0-9A-Za-z_-]{35}
+Gemini API key|AQ\.[A-Za-z0-9_-]{30,}
+JWT with payload|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}
+PEM private key|__PEM__
+Service account private key|"type"[[:space:]]*:[[:space:]]*"service_account"[[:space:]]*,[[:space:]]*"private_key"
+Long base64 blob|[A-Za-z0-9+/]{60,}={0,2}
+PATTERNS
+
+if [ -s "$trip" ]; then
+  printf '\n\033[31m[secret-scan] credential material found in staged files:\033[0m\n'
+  cat "$trip"
+  printf '\nMove the value into .env (git-ignored) and read it via process.env,\n'
+  printf 'or replace it with a placeholder. To commit anyway:\n'
+  printf '  git commit --no-verify\n\n'
+  exit 1
+fi
+
+printf '\033[32m[secret-scan] clean\033[0m\n'
+exit 0

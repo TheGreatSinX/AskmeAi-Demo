@@ -13,23 +13,36 @@ a floating desktop HUD and a role-based admin console.
 
 ```bash
 npm install
+git config core.hooksPath .githooks   # enable the pre-commit secret scan
 npm run dev        # http://localhost:3000
 ```
 
-With no Firebase configuration the app boots in **local demo mode**: data is stored in
-`data/database.json` and the seeded `Alex Rivers` (super_admin) account is used automatically —
-no sign-in screen.
+The pre-commit hook scans **staged** content for credential material — Google/Gemini keys,
+complete JWTs, PEM private keys, service-account JSON, long base64 blobs and any `.env` file —
+and refuses the commit if it finds any. Placeholders and documentation are unaffected. To bypass
+it deliberately: `git commit --no-verify`.
+
+No credential of any kind is stored in this repository; real keys live only in your local
+`.env` (git-ignored) or a git-ignored service-account file.
+
+With no Firebase configuration the server logs a warning and runs in **local demo mode**: data is
+stored in `data/database.json` and the seeded `Alex Rivers` (super_admin) account is used
+automatically — no sign-in screen. Once any Firebase configuration exists, ID tokens are required
+regardless of which store was selected.
 
 ---
 
 ## Firebase integration
 
-The server picks its persistence layer at boot:
+The server picks its persistence layer and its authentication **independently** — a store failure
+never silently turns off sign-in:
 
 | Condition | Store | Auth |
 |---|---|---|
-| `DATA_BACKEND=file` | local `data/database.json` | demo account |
-| Firebase credentials present | **Cloud Firestore** via `firebase-admin` | **Firebase ID token required** |
+| `DATA_BACKEND=file` | local `data/database.json` | **Firebase ID token required**, if firebase-admin can initialize (project id / credentials / emulators present); demo account otherwise |
+| Credentials reach Firestore (verified by a startup probe) | **Cloud Firestore** via `firebase-admin` | **Firebase ID token required** |
+| Credentials exist but Firestore is unreachable | local `data/database.json`, loud warning | **Firebase ID token required** (verification needs no Firestore access) |
+| Only a project id (no private key) | local `data/database.json` | **Firebase ID token required** — verify-only mode, checked against Google's public certificates |
 | Nothing configured | local `data/database.json` | demo account |
 
 ### 1. Create the project
@@ -74,20 +87,27 @@ any one of these forms (all go into `.env`):
 
 ```dotenv
 # a) raw JSON (single line, quotes escaped)
-FIREBASE_SERVICE_ACCOUNT="{\"type\":\"service_account\",...}"
+FIREBASE_SERVICE_ACCOUNT="{\"type\":\"service_account\",\"private_key\":\"...\"}"
 
 # b) base64-encoded JSON
-FIREBASE_SERVICE_ACCOUNT="eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9..."
+FIREBASE_SERVICE_ACCOUNT="<base64-encoded-service-account-json>"
 
 # c) file path (recommended for local dev — the file is git-ignored)
 GOOGLE_APPLICATION_CREDENTIALS="./serviceAccount.json"
 
 # d) only a project id, for environments with ambient credentials
-#    (Cloud Run / GCE / workload identity)
+#    (Cloud Run / GCE / workload identity), or to run verify-only mode
 FIREBASE_PROJECT_ID="your-project"
 ```
 
-Without any of these the server falls back to the JSON store and logs a warning.
+> Every value above is a **placeholder**. No credential of any kind is stored in this repository:
+> real keys live only in your local `.env` (git-ignored) or a service-account file that is
+> explicitly ignored by `.gitignore`. Never paste a real key into this file.
+
+With none of (a)–(c), the server falls back to Application Default Credentials
+(`gcloud auth application-default login`, or a runtime service account). With no private key at all
+it enters **verify-only** mode: data stays in `data/database.json`, but ID tokens are still
+verified for real. Only when no project id is resolvable either does it drop to demo mode.
 
 ### 5. Run
 
@@ -134,7 +154,8 @@ Authorization: Bearer <idToken>     →   uid = req.auth.uid
 
 `users`, `user_devices`, `credit_wallets`, `credit_transactions`, `subscriptions`, `resumes`,
 `documents`, `sessions`, `session_transcripts`, `session_answers`, `session_notes`, `audit_logs`,
-`admin_settings`.
+`admin_settings`. `firestore.rules` additionally declares `admins` (server-owned membership markers,
+readable only by the signed-in user they name — no server code writes it today).
 
 > Queries filter on a single field and sort in memory, so **no composite indexes** are required.
 

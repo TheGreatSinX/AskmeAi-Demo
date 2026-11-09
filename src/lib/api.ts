@@ -234,8 +234,13 @@ export const api = {
     return json(`/api/sessions/${id}/data`, {}, 'Failed to load session data');
   },
 
-  async submitTranscript(sessionId: string, speaker: 'interviewer' | 'candidate', text: string): Promise<TranscriptLine> {
+  async submitTranscript(sessionId: string, speaker: 'interviewer' | 'candidate', text: string): Promise<{ line: TranscriptLine; answer?: SessionAnswer } | TranscriptLine> {
     return json(`/api/sessions/${sessionId}/transcript`, post(`/api/sessions/${sessionId}/transcript`, { speaker, text }), 'Failed to submit transcript');
+  },
+
+  /** Server-side speech-to-text for meeting audio (captures interviewer on the other side). */
+  async transcribeAudio(audioBase64: string, mimeType: string): Promise<{ text: string }> {
+    return json('/api/transcribe', post('/api/transcribe', { audioBase64, mimeType }), 'Failed to transcribe audio');
   },
 
   async generateAnswer(

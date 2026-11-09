@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { gemini, PRIMARY_MODEL } from './src/server/gemini.js';
 import { backupAi } from './src/server/backupAi.js';
 import { db, authEnabled, firebaseAdmin, DEMO_FALLBACK_UID } from './src/server/store.js';
-import { TranscriptLine, SessionAnswer, SessionNotes, UserRole, User } from './src/types/index.js';
+import { TranscriptLine, SessionAnswer, SessionNotes, UserRole, User, AnswerStyle } from './src/types/index.js';
 import { EnrollmentError } from './src/server/dataStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -654,7 +654,20 @@ Respond ONLY with valid JSON:
     if (session.saveTranscript !== false) {
       await db.addTranscriptLine(session.id, line);
     }
-    res.json(line);
+
+    // PARALLEL OPTIMIZATION: If this is a high-confidence question, generate
+    // the answer in the same request instead of making the client do a second
+    // round trip. Returns { line, answer } so the UI shows everything at once.
+    let answer: SessionAnswer | undefined;
+    if (line.isQuestion && line.confidence > 0.65) {
+      try {
+        answer = await generateAnswerForSession(session, cleanText, session.answerStyle || 'star', undefined);
+      } catch (e) {
+        console.error('Inline answer generation failed:', e);
+      }
+    }
+
+    res.json(answer ? { line, answer } : line);
   } catch (error: any) {
     console.error('Transcript error:', error);
     res.status(500).json({ error: error.message });
@@ -662,6 +675,139 @@ Respond ONLY with valid JSON:
 });
 
 // AI Answer Engine (Personalized, Grounded in Resume & Knowledge Base)
+// ── Shared answer generation used by both transcript and generate-answer ──
+async function generateAnswerForSession(
+  session: { id: string; userId: string; resumeId?: string; answerStyle?: string; language?: string; instructions?: string; targetRole?: string; targetCompany?: string; mode?: string; model?: string },
+  questionText: string,
+  answerStyle: string,
+  customHint?: string
+): Promise<SessionAnswer> {
+  const [resumes, documents] = await Promise.all([
+    db.getResumes(session.userId),
+    db.getDocuments(session.userId),
+  ]);
+  const resume =
+    (session.resumeId && resumes.find((r) => r.id === session.resumeId)) ||
+    resumes.find((r) => r.isPrimary) ||
+    resumes[0];
+
+  const resumeContext = resume
+    ? 'CANDIDATE ACTUAL BACKGROUND:\n' +
+      `Name: ${resume.parsedProfile?.name || 'Candidate'}\n` +
+      `Headline: ${resume.parsedProfile?.headline || ''}\n` +
+      `Skills: ${(resume.parsedProfile?.skills || []).join(', ')}\n` +
+      'Work History:\n' +
+      `${(resume.parsedProfile?.experience || []).map((e) => `- ${e.role} at ${e.company} (${e.duration}): ${e.highlights.join(' ')}`).join('\n')}\n` +
+      'Education:\n' +
+      `${(resume.parsedProfile?.education || []).map((ed) => `- ${ed.degree} from ${ed.institution} (${ed.year})`).join('\n')}`
+    : 'No resume provided. Provide general best-practice answers.';
+
+  const knowledgeContext = documents.length > 0
+    ? 'RELEVANT COMPANY & TECHNICAL KNOWLEDGE BASE:\n' +
+      documents.map((d) => `[${d.title}]: ${d.content.slice(0, 1000)}`).join('\n\n')
+    : '';
+
+  const systemInstruction = `You are AskMeAi, an elite real-time AI Interview Copilot.
+Your job is to provide the candidate with natural, highly compelling, structured talking points to ace this exact interview question.
+
+CRITICAL RULES:
+1. STRICT AUTHENTICITY: Ground your response entirely in the candidate's actual resume experience. NEVER invent companies, degrees, or unlisted credentials.
+2. ADAPT TO SELECTED STYLE: '${answerStyle}' — ${answerStyle === 'star' ? 'STAR breakdown' : answerStyle === 'concise' ? 'Under 60 words' : answerStyle === 'technical' ? 'Architectural depth' : answerStyle === 'step_by_step' ? 'Structured workflow' : answerStyle === 'bullets' ? 'Scannable bullets' : 'Word-for-word script'}.
+3. Target Role: ${session.targetRole || 'Software Engineer'}
+4. Target Company: ${session.targetCompany || 'General Tech'}
+5. Session mode: ${session.mode === 'meeting' ? 'REGULAR CALL/MEETING' : 'INTERVIEW'}
+${session.language && session.language !== 'en-US' ? `6. Write in "${session.language}". Keep code/identifiers in English.\n` : ''}${session.instructions ? `7. STANDING INSTRUCTIONS: ${session.instructions}\n` : ''}`;
+
+  const prompt = `INTERVIEW QUESTION: "${questionText}"
+ANSWER STYLE REQUESTED: ${answerStyle.toUpperCase()}
+${customHint ? `ADDITIONAL HINT: "${customHint}"` : ''}
+
+${resumeContext}
+
+${knowledgeContext}
+
+Respond ONLY with valid JSON:
+{
+  "answerText": "...",
+  "category": "behavioral" | "technical" | "coding" | "smalltalk",
+  "starBreakdown": { "situation": "...", "task": "...", "action": "...", "result": "..." },
+  "groundingSources": ["..."],
+  "confidenceScore": 0.95
+}`;
+
+  const answerResponse = await safeGenerateContent(
+    {
+      model: sessionModel(session),
+      contents: prompt,
+      config: { systemInstruction, responseMimeType: 'application/json' },
+    },
+    25000
+  );
+
+  const exp = resume?.parsedProfile?.experience?.[0] || {
+    company: 'Stripe',
+    role: 'Staff Software Engineer',
+    highlights: ['Led architectural redesign of real-time payout processing pipeline.'],
+  };
+
+  let parsedResult = {
+    answerText: `When approaching this at ${exp.company}, I focused on architectural isolation and strict observability.`,
+    category: 'technical' as const,
+    starBreakdown: { situation: '', task: '', action: '', result: '' },
+    groundingSources: [resume ? `Resume: ${resume.fileName}` : 'General Context'],
+    confidenceScore: 0.96,
+  };
+
+  if (answerResponse && answerResponse.text) {
+    try {
+      parsedResult = JSON.parse(answerResponse.text);
+    } catch (e) {
+      console.warn('Answer JSON parse warning:', e);
+    }
+  }
+
+  const answerRecord: SessionAnswer = {
+    id: 'ans_' + Math.random().toString(36).substring(2, 9),
+    sessionId: session.id,
+    questionText,
+    category: parsedResult.category || 'behavioral',
+    answerText: parsedResult.answerText,
+    answerStyle: answerStyle as AnswerStyle,
+    starBreakdown: parsedResult.starBreakdown,
+    groundingSources: parsedResult.groundingSources || [],
+    confidenceScore: parsedResult.confidenceScore || 0.95,
+    saved: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  await db.addAnswer(session.id, answerRecord);
+  return answerRecord;
+}
+// ── Meeting-audio speech-to-text (captures interviewer on the other side) ──
+app.post('/api/transcribe', requireAuth, async (req: AuthedRequest, res: Response) => {
+  const { audioBase64, mimeType = 'audio/webm' } = req.body || {};
+  if (!audioBase64 || typeof audioBase64 !== 'string') {
+    return res.status(400).json({ error: 'audioBase64 required' });
+  }
+  try {
+    const result = await safeGenerateContent(
+      {
+        model: PRIMARY_MODEL,
+        contents: [
+          { text: 'Transcribe this audio clip. Return ONLY the spoken text, no punctuation, no commentary, no labels. If no speech is detected, return an empty string.' },
+          { inlineData: { mimeType, data: audioBase64 } },
+        ],
+      },
+      30000
+    );
+    const text = (result?.text || '').trim();
+    res.json({ text });
+  } catch (error: any) {
+    console.error('Transcribe error:', error);
+    res.status(500).json({ error: error.message || 'Transcription failed' });
+  }
+});
+// AI Answer Engine (standalone endpoint, kept for manual/photo answer triggers)
 app.post('/api/sessions/:id/generate-answer', async (req: AuthedRequest, res: Response) => {
   try {
     const { questionText, customHint } = req.body;
@@ -673,130 +819,14 @@ app.post('/api/sessions/:id/generate-answer', async (req: AuthedRequest, res: Re
     const session = await loadOwnedSession(req, res);
     if (!session) return;
 
-    // Retrieve Candidate Context
-    const [resumes, documents] = await Promise.all([
-      db.getResumes(session.userId),
-      db.getDocuments(session.userId),
-    ]);
-    const resume =
-      (session.resumeId && resumes.find((r) => r.id === session.resumeId)) ||
-      resumes.find((r) => r.isPrimary) ||
-      resumes[0];
-
-    const resumeContext = resume
-      ? `CANDIDATE ACTUAL BACKGROUND:
-Name: ${resume.parsedProfile?.name || 'Candidate'}
-Headline: ${resume.parsedProfile?.headline || ''}
-Skills: ${(resume.parsedProfile?.skills || []).join(', ')}
-Work History:
-${(resume.parsedProfile?.experience || []).map((e) => `- ${e.role} at ${e.company} (${e.duration}): ${e.highlights.join(' ')}`).join('\n')}
-Education:
-${(resume.parsedProfile?.education || []).map((ed) => `- ${ed.degree} from ${ed.institution} (${ed.year})`).join('\n')}`
-      : 'No resume provided. Provide general best-practice answers.';
-
-    const knowledgeContext = documents.length > 0
-      ? `RELEVANT COMPANY & TECHNICAL KNOWLEDGE BASE:
-${documents.map((d) => `[${d.title}]: ${d.content.slice(0, 1000)}`).join('\n\n')}`
-      : '';
-
-    const systemInstruction = `You are AskMeAi, an elite real-time AI Interview Copilot.
-Your job is to provide the candidate with natural, highly compelling, structured talking points to ace this exact interview question.
-
-CRITICAL RULES:
-1. STRICT AUTHENTICITY: Ground your response entirely in the candidate's actual resume experience provided below. NEVER invent companies, degrees, or unlisted credentials.
-2. If the question asks about a specific technology or tool not on the resume, explain how to highlight transferable skills truthfully.
-3. ADAPT TO SELECTED STYLE:
-   - 'star': Return a comprehensive response with clear Situation, Task, Action, and Result breakdown.
-   - 'concise': High-impact executive talking points under 60 words.
-   - 'technical': Architectural depth, tradeoffs, throughput/scale, and failure recovery.
-   - 'step_by_step': Structured troubleshooting or structured thought workflow.
-   - 'bullets': Scannable bullet points (• prefix), each one line, no prose paragraphs.
-   - 'full_script': A word-for-word script the candidate can read aloud naturally, conversational, no headings or labels.
-4. Target Role: ${session.targetRole}
-5. Target Company: ${session.targetCompany}
-6. Session mode: ${session.mode === 'meeting' ? 'REGULAR CALL/MEETING - answer as a helpful participant: concise contributions, clarifications, and recap points rather than interview answers.' : 'INTERVIEW - answer as the candidate being interviewed.'}
-${session.language && session.language !== 'en-US' ? `7. LANGUAGE: Write the entire answerText in the language matching "${session.language}" (e.g. the candidate's interview language). Keep any code or identifiers in English.\n` : ''}${session.instructions ? `8. STANDING INSTRUCTIONS FROM THE CANDIDATE (always obey): ${session.instructions}\n` : ''}${/(system design|design a|architect|architecture|scale|high availability|distributed)/i.test(questionText) ? `9. DIAGRAM: After the prose, include a fenced mermaid block (\`\`\`mermaid\nflowchart TD\n...\n\`\`\`) sketching the design. Use ONLY simple flowchart syntax: node ids like A, B, nodes with labels like A[Client], and edges like A --> B. No subgraphs, no classDef, no other diagram types.` : ''}`;
-
-    const prompt = `INTERVIEW QUESTION: "${questionText}"
-ANSWER STYLE REQUESTED: ${answerStyle.toUpperCase()}
-${customHint ? `ADDITIONAL USER HINT: "${customHint}"` : ''}
-
-${resumeContext}
-
-${knowledgeContext}
-
-Generate the response in JSON format:
-{
-  "answerText": "Full formatted response for candidate to read or reference",
-  "category": "behavioral" | "technical" | "coding" | "smalltalk",
-  "starBreakdown": {
-    "situation": "Context",
-    "task": "Problem",
-    "action": "Specific concrete steps taken",
-    "result": "Measurable business outcome"
-  },
-  "groundingSources": ["Specific resume role or project used"],
-  "confidenceScore": 0.95
-}`;
-
-    const answerResponse = await safeGenerateContent({
-      model: sessionModel(session),
-      contents: prompt,
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-      },
-    });
-
-    // Default grounded fallback from candidate's verified profile
-    const exp = resume?.parsedProfile?.experience?.[0] || {
-      company: 'Stripe',
-      role: 'Staff Software Engineer',
-      highlights: ['Led architectural redesign of real-time payout processing pipeline, cutting latency by 42% for $12B annual volume.'],
-    };
-
-    let parsedResult = {
-      answerText: `When approaching this at ${exp.company}, I focused on architectural isolation and strict observability. In our real-time payout pipeline handling 85,000 requests per second, we encountered sudden downstream latency spikes. I spearheaded the migration to an event-driven Kafka architecture with partitioned idempotency keys and in-memory Redis lock checks. This cut p99 latency by 42% and guaranteed exactly-once processing with zero duplicate transactions across $12B in volume.`,
-      category: 'technical' as const,
-      starBreakdown: {
-        situation: `At ${exp.company}, our core payout pipeline faced latency spikes up to 450ms during peak merchant settlement windows.`,
-        task: `I was tasked with redesigning the ingestion and execution pipeline to achieve sub-50ms p99 latency while preserving strict financial idempotency.`,
-        action: `Architected an event-driven stream using Kafka partitioned by merchant ID, backed by Redis for in-memory ledger lock verification and asynchronous database flush.`,
-        result: `Reduced p99 latency by 42%, achieved 85,000 req/sec sustained throughput, and supported $12B in processed transactions without a single duplicate payout.`,
-      },
-      groundingSources: [resume ? `Resume: ${resume.fileName} (${exp.role} at ${exp.company})` : 'General Engineering Context'],
-      confidenceScore: 0.96,
-    };
-
-    if (answerResponse && answerResponse.text) {
-      try {
-        parsedResult = JSON.parse(answerResponse.text);
-      } catch (e) {
-        console.warn('Answer JSON parse warning:', e);
-      }
-    }
-
-    const answerRecord: SessionAnswer = {
-      id: 'ans_' + Math.random().toString(36).substring(2, 9),
-      sessionId: session.id,
-      questionText,
-      category: parsedResult.category || 'behavioral',
-      answerText: parsedResult.answerText,
-      answerStyle,
-      starBreakdown: parsedResult.starBreakdown,
-      groundingSources: parsedResult.groundingSources || [],
-      confidenceScore: parsedResult.confidenceScore || 0.95,
-      saved: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    await db.addAnswer(session.id, answerRecord);
-    res.json(answerRecord);
+    const answer = await generateAnswerForSession(session, questionText, answerStyle, customHint);
+    res.json(answer);
   } catch (error: any) {
     console.error('Answer generation error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate answer' });
   }
 });
+
 
 // Screenshot / photo of a question -> grounded answer (multimodal, ParakeetAI-style)
 app.post('/api/sessions/:id/answer-from-image', async (req: AuthedRequest, res: Response) => {

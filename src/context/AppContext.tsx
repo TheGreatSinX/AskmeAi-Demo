@@ -66,6 +66,8 @@ interface AppContextType {
   startListening: () => Promise<void>;
   stopListening: () => void;
   toggleMeetingAudio: () => Promise<void>;
+  startMeetingTranscription: () => void;
+  stopMeetingTranscription: () => void;
   setSelectedMicId: (micId: string) => void;
   // HUD controls
   openHUD: () => void;
@@ -165,6 +167,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const recognitionRef = useRef<any>(null);
+  const meetingRecorderRef = useRef<MediaRecorder | null>(null);
+  const meetingTranscriptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -327,7 +331,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setPendingTranscript(null);
               if (text && activeSession) {
                 try {
-                  const line = await api.submitTranscript(activeSession.id, 'interviewer', text);
+                  const result = await api.submitTranscript(activeSession.id, 'interviewer', text);
+                  // Server may return { line, answer } (combined detection+answer) or just { line }
+                  const res: any = result;
+                  const line = res.line || res;
+                  const answer = res.answer;
                   setLiveTranscripts((prev) => [...prev, line]);
 
                   // Question detected with high confidence -> honour the session's
@@ -339,21 +347,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     } else {
                       const style = activeSession.answerStyle || 'star';
                       showToast(`Detected Interviewer Question (${confidence}% match)`, 'info');
-                      markAnswering(line.text);
-                      api
-                        .generateAnswer(activeSession.id, line.text, style)
-                        .then((ans) => {
-                          setLiveAnswers((prev) => [ans, ...prev]);
-                          unmarkAnswering(line.text);
-                          showToast(
-                            style === 'star' ? 'New STAR Answer Formulated' : 'New Answer Formulated',
-                            'success'
-                          );
-                        })
-                        .catch((err) => {
-                          unmarkAnswering(line.text);
-                          console.error('Auto-answer error:', err);
-                        });
+                      // If the server already generated the answer inline, show it immediately.
+                      if (answer) {
+                        setLiveAnswers((prev) => [answer, ...prev]);
+                        showToast(
+                          style === 'star' ? 'New STAR Answer Formulated' : 'New Answer Formulated',
+                          'success'
+                        );
+                      } else {
+                        markAnswering(line.text);
+                        api
+                          .generateAnswer(activeSession.id, line.text, style)
+                          .then((ans) => {
+                            setLiveAnswers((prev) => [ans, ...prev]);
+                            unmarkAnswering(line.text);
+                            showToast(
+                              style === 'star' ? 'New STAR Answer Formulated' : 'New Answer Formulated',
+                              'success'
+                            );
+                          })
+                          .catch((err) => {
+                            unmarkAnswering(line.text);
+                            console.error('Auto-answer error:', err);
+                          });
+                      }
                     }
                   }
                 } catch (e) {
@@ -458,8 +475,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Meeting Audio Capture (Zoom, Google Meet, Teams, Webex via getDisplayMedia)
+  // Meeting-audio transcription: captures interviewer on the other side via MediaRecorder -> /api/transcribe
+  const startMeetingTranscription = () => {
+    if (!screenStreamRef.current || meetingRecorderRef.current) return;
+
+    const mediaRecorder = new MediaRecorder(screenStreamRef.current, {
+      mimeType: 'audio/webm',
+    });
+    meetingRecorderRef.current = mediaRecorder;
+
+    mediaRecorder.ondataavailable = async (event) => {
+      if (event.data.size === 0 || !activeSession) return;
+      try {
+        const arrayBuffer = await event.data.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        const result = await api.transcribeAudio(base64, 'audio/webm');
+        const text = (result.text || '').trim();
+        if (!text) return;
+
+        try {
+          const submitResult = await api.submitTranscript(activeSession.id, 'interviewer', text);
+          const res: any = submitResult;
+          const line = res.line || res;
+          const answer = res.answer;
+          setLiveTranscripts((prev) => [...prev, line]);
+
+          if (line.isQuestion && line.confidence > 0.75) {
+            const confidence = Math.round(line.confidence * 100);
+            if (activeSession.autoAnswer === false) {
+              showToast(`Question detected (${confidence}% match) — auto-answer is off`, 'info');
+            } else {
+              const style = activeSession.answerStyle || 'star';
+              showToast(`Detected Interviewer Question (${confidence}% match)`, 'info');
+              if (answer) {
+                setLiveAnswers((prev) => [answer, ...prev]);
+                showToast(
+                  style === 'star' ? 'New STAR Answer Formulated' : 'New Answer Formulated',
+                  'success'
+                );
+              } else {
+                markAnswering(line.text);
+                api
+                  .generateAnswer(activeSession.id, line.text, style)
+                  .then((ans) => {
+                    setLiveAnswers((prev) => [ans, ...prev]);
+                    unmarkAnswering(line.text);
+                  })
+                  .catch((err) => {
+                    unmarkAnswering(line.text);
+                    console.error('Auto-answer error:', err);
+                  });
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Meeting transcript error:', e);
+        }
+      } catch (e) {
+        console.error('Meeting audio chunk error:', e);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      meetingRecorderRef.current = null;
+    };
+
+    mediaRecorder.start(1000); // 1-second chunks for near real-time
+  };
+
+  const stopMeetingTranscription = () => {
+    if (meetingRecorderRef.current) {
+      try { meetingRecorderRef.current.stop(); } catch (_) {}
+      meetingRecorderRef.current = null;
+    }
+  };
+
   const toggleMeetingAudio = async () => {
     if (audioState.isMeetingAudioActive) {
+      stopMeetingTranscription();
       if (screenStreamRef.current) {
         screenStreamRef.current.getTracks().forEach((track) => track.stop());
         screenStreamRef.current = null;
@@ -493,8 +586,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           source.connect(analyserRef.current);
         }
 
+        // Start transcribing meeting audio (hears the interviewer on the other side)
+        startMeetingTranscription();
+
         // When user stops sharing from browser banner
         audioTracks[0].onended = () => {
+          stopMeetingTranscription();
           setAudioState((prev) => ({ ...prev, isMeetingAudioActive: false }));
         };
 
@@ -605,6 +702,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         startListening,
         stopListening,
         toggleMeetingAudio,
+        startMeetingTranscription,
+        stopMeetingTranscription,
         setSelectedMicId,
         openHUD,
         closeHUD,

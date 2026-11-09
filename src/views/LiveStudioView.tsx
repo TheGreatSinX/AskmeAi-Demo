@@ -107,7 +107,9 @@ export const LiveStudioView: React.FC = () => {
     setManualInput('');
 
     // Append transcript line
-    const line = await api.submitTranscript(activeSession.id, 'interviewer', question);
+    const submitResult = await api.submitTranscript(activeSession.id, 'interviewer', question);
+    const res: any = submitResult;
+    const line = res.line || res;
     addLiveTranscript(line);
 
     markAnswering(question);
@@ -266,7 +268,8 @@ export const LiveStudioView: React.FC = () => {
       showToast('Please launch a session first', 'error');
       return;
     }
-    const line = await api.submitTranscript(activeSession.id, 'interviewer', sampleQuestion);
+    const res: any = await api.submitTranscript(activeSession.id, 'interviewer', sampleQuestion);
+    const line = res.line || res;
     addLiveTranscript(line);
 
     setIsGenerating(true);

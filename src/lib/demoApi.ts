@@ -482,6 +482,13 @@ export async function demoFetch(path: string, init: RequestInit = {}): Promise<a
     return line;
   }
 
+  if (route === '/api/transcribe' && method === 'POST') {
+    // Demo mode: no real audio STT available. Return the audio length as a hint
+    // that transcription happened; real transcription uses the server endpoint.
+    const text = body?.audioBase64 ? `(audio chunk received, ${body.audioBase64.length} bytes)` : '';
+    return { text };
+  }
+
   const answerMatch = route.match(/^\/api\/sessions\/([^/]+)\/generate-answer$/);
   if (answerMatch && method === 'POST') {
     const sessionId = answerMatch[1];

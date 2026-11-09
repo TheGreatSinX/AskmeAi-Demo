@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
-  signInWithRedirect,
   signInWithPopup,
-  getRedirectResult,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -99,21 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    // Handle redirect result from Google sign-in (signInWithRedirect)
-    getRedirectResult(auth)
-      .then((result) => {
-        const user = result?.user;
-        if (user) {
-          userRef.current = user;
-          setFirebaseUser(user);
-        }
-        setInitializing(false);
-      })
-      .catch((err) => {
-        console.error('Redirect result error:', err);
-        setInitializing(false);
-      });
-
     return () => {
       unsubscribe();
       setTokenProvider(null);
@@ -165,8 +148,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = useCallback(async () => {
     if (!auth) throw new Error('Firebase Auth is not configured.');
     try {
-      await signInWithRedirect(auth, new GoogleAuthProvider());
+      await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (err: any) {
+      // Cross-Origin-Opener-Policy may block window.close in the popup,
+      // but sign-in may still have succeeded. Check current user.
+      if (err.code === 'auth/popup-closed-by-user') {
+        throw new Error(friendlyAuthError(err));
+      }
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        userRef.current = currentUser;
+        setFirebaseUser(currentUser);
+        return;
+      }
       throw new Error(friendlyAuthError(err));
     }
   }, []);

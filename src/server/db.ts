@@ -82,7 +82,6 @@ function stateFromSeed(seed: DemoSeed): DatabaseState {
 /** Seed state used when no local database.json exists yet. */
 const INITIAL_STATE: DatabaseState = stateFromSeed(
   createDemoSeed(DEMO_USER_ID, 'thegreatsinx@gmail.com', 'Alex Rivers', {
-    demo: true,
     devices: [
       {
         id: 'dev_macbook_pro',
@@ -159,9 +158,7 @@ export class Database implements DataStore {
       return existing;
     }
 
-    const seed = createDemoSeed(account.uid, account.email, account.displayName, {
-      demo: process.env.SEED_DEMO_DATA !== 'false',
-    });
+    const seed = createDemoSeed(account.uid, account.email, account.displayName, {});
     // Invitation-only: a brand-new account must be on the enrolled list.
     const settings = await this.getAdminSettings();
     const enrolled = (settings.enrolledEmails || []).map((e) => e.toLowerCase());

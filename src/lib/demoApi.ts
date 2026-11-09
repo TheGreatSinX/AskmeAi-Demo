@@ -63,7 +63,7 @@ function state(): DemoState {
   }
 
   if (!loaded || !loaded.user || !loaded.wallet) {
-    const seed = createDemoSeed(DEMO_UID, 'demo@askmeai.local', 'Demo Explorer', { demo: true });
+    const seed = createDemoSeed(DEMO_UID, 'demo@askmeai.local', 'Demo Explorer', {});
     // Visitors may open the admin console; every figure there is canned data.
     seed.user.role = 'super_admin';
     loaded = { ...seed, adminSettings: { ...DEFAULT_SETTINGS } };

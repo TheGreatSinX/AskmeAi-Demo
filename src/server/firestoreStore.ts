@@ -119,9 +119,7 @@ export class FirestoreStore implements DataStore {
       return next;
     }
 
-    const seed = createDemoSeed(account.uid, account.email, account.displayName, {
-      demo: process.env.SEED_DEMO_DATA !== 'false',
-    });
+    const seed = createDemoSeed(account.uid, account.email, account.displayName, {});
     // Invitation-only: a brand-new account must be on the enrolled list.
     const settings = await this.getAdminSettings();
     const enrolled = (settings.enrolledEmails || []).map((e) => e.toLowerCase());

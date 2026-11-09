@@ -96,6 +96,8 @@ interface AppContextType {
   // Live transcripts and answers cache
   liveTranscripts: TranscriptLine[];
   liveAnswers: SessionAnswer[];
+  /** Partial (not-yet-final) speech text — shown live as the user speaks. */
+  interimTranscript: string;
   addLiveTranscript: (line: TranscriptLine) => void;
   addLiveAnswer: (answer: SessionAnswer) => void;
   setLiveTranscripts: React.Dispatch<React.SetStateAction<TranscriptLine[]>>;
@@ -135,6 +137,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Live session stream state
   const [liveTranscripts, setLiveTranscripts] = useState<TranscriptLine[]>([]);
   const [liveAnswers, setLiveAnswers] = useState<SessionAnswer[]>([]);
+  const [interimTranscript, setInterimTranscript] = useState('');
 
   // Audio Processing State
   const [audioState, setAudioState] = useState<AudioState>({
@@ -297,8 +300,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         recognition.onresult = async (event: any) => {
           for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const text = event.results[i][0].transcript.trim();
             if (event.results[i].isFinal) {
-              const text = event.results[i][0].transcript.trim();
+              // Clear the interim line once a final result arrives.
+              setInterimTranscript('');
               if (text && activeSession) {
                 try {
                   const line = await api.submitTranscript(activeSession.id, 'interviewer', text);
@@ -329,6 +334,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   console.error('Transcript error:', e);
                 }
               }
+            } else {
+              // Interim (partial) result — show it live as the user speaks.
+              setInterimTranscript(text);
             }
           }
         };
@@ -554,6 +562,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         endSession,
         liveTranscripts,
         liveAnswers,
+        interimTranscript,
         addLiveTranscript,
         addLiveAnswer,
         setLiveTranscripts,

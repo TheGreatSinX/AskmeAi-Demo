@@ -32,6 +32,7 @@ export const LiveStudioView: React.FC = () => {
     toggleMeetingAudio,
     liveTranscripts,
     liveAnswers,
+    interimTranscript,
     addLiveTranscript,
     addLiveAnswer,
     endSession,
@@ -498,6 +499,12 @@ export const LiveStudioView: React.FC = () => {
               ))
             )}
             <div ref={transcriptEndRef} />
+            {interimTranscript && (
+              <div className="flex items-center gap-2 px-3 py-2 text-xs italic text-slate-400">
+                <span className="h-2 w-2 rounded-full bg-slate-600 animate-pulse" />
+                {interimTranscript}
+              </div>
+            )}
           </div>
 
           {/* Manual input footer + screenshot answer */}

@@ -30,7 +30,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
               !isActive
                 ? 'bg-slate-700/50'
                 : isHigh
-                ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
+                ? 'bg-emerald-400'
                 : isMed
                 ? 'bg-emerald-500/80'
                 : 'bg-emerald-600/50'

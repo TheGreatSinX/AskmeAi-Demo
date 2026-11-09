@@ -212,7 +212,7 @@ export const CodingSandboxView: React.FC = () => {
   return (
     <div className="space-y-5 max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-3xl border border-slate-800 bg-slate-900/80 backdrop-blur-md shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-xl border border-slate-800 bg-slate-900/80  ">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
             <Code2 className="h-5 w-5" />
@@ -256,7 +256,7 @@ export const CodingSandboxView: React.FC = () => {
           <button
             onClick={handleAnalyze}
             disabled={isAnalyzing}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-md shadow-emerald-500/25 transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-400 text-[#052e1c] hover:bg-emerald-300 transition-all"
           >
             <Sparkles className="h-3.5 w-3.5 fill-slate-950" />
             <span>{isAnalyzing ? 'Analyzing Big-O...' : 'Analyze with AI'}</span>
@@ -285,9 +285,9 @@ export const CodingSandboxView: React.FC = () => {
       {/* Main 2-Column Split: Left Editor, Right AI Analysis */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left: Problem & Code Workspace (6 Cols) */}
-        <div className="lg:col-span-6 flex flex-col h-[700px] rounded-3xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg space-y-3 overflow-hidden">
+        <div className="lg:col-span-6 flex flex-col h-[700px] rounded-xl border border-slate-800 bg-slate-900/70 p-4  space-y-3 overflow-hidden">
           {/* Problem Spec */}
-          <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+          <div className="p-3.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1.5">
             <input
               type="text"
               value={problemTitle}
@@ -305,7 +305,7 @@ export const CodingSandboxView: React.FC = () => {
           </div>
 
           {/* Code Editor */}
-          <div className="flex-1 flex flex-col rounded-2xl bg-slate-950 border border-slate-800/90 overflow-hidden font-mono text-xs">
+          <div className="flex-1 flex flex-col rounded-lg bg-slate-950 border border-slate-800/90 overflow-hidden font-mono text-xs">
             <div className="flex items-center justify-between px-3.5 py-2 border-b border-slate-800/80 bg-slate-900/50 text-[11px] text-slate-400">
               <span>Solution Editor ({selectedLanguage})</span>
               <button
@@ -326,7 +326,7 @@ export const CodingSandboxView: React.FC = () => {
 
           {/* Test Case Output Console */}
           {executionResult && (
-            <div className="p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-2 text-xs font-mono">
+            <div className="p-3.5 rounded-lg bg-slate-950/90 border border-slate-800 space-y-2 text-xs font-mono">
               <div className="flex items-center justify-between text-[11px]">
                 <span className="text-emerald-400 font-bold flex items-center gap-1.5">
                   <Terminal className="h-3.5 w-3.5" /> All {executionResult.totalCases} Test Cases Passed
@@ -347,7 +347,7 @@ export const CodingSandboxView: React.FC = () => {
         </div>
 
         {/* Right: AI Algorithmic Guidance & Complexity (6 Cols) */}
-        <div className="lg:col-span-6 flex flex-col h-[700px] rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg overflow-y-auto space-y-4">
+        <div className="lg:col-span-6 flex flex-col h-[700px] rounded-xl border border-slate-800 bg-slate-900/70 p-5  overflow-y-auto space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <Cpu className="h-4 w-4 text-emerald-400" /> AI Complexity & Solution Engine
@@ -367,7 +367,7 @@ export const CodingSandboxView: React.FC = () => {
             <div className="space-y-4 animate-in fade-in duration-200">
               {/* Complexity Badges */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-emerald-500/20 space-y-1">
+                <div className="p-3.5 rounded-lg bg-slate-950/80 border border-emerald-500/20 space-y-1">
                   <div className="flex items-center gap-1.5 text-xs text-slate-400">
                     <Clock className="h-3.5 w-3.5 text-emerald-400" />
                     <span>Time Complexity</span>
@@ -378,7 +378,7 @@ export const CodingSandboxView: React.FC = () => {
                   <p className="text-[10px] text-slate-400">Single pass hash table lookup</p>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-cyan-500/20 space-y-1">
+                <div className="p-3.5 rounded-lg bg-slate-950/80 border border-cyan-500/20 space-y-1">
                   <div className="flex items-center gap-1.5 text-xs text-slate-400">
                     <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
                     <span>Space Complexity</span>
@@ -391,7 +391,7 @@ export const CodingSandboxView: React.FC = () => {
               </div>
 
               {/* Intuition & Approach */}
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+              <div className="p-4 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1.5">
                 <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">
                   Algorithmic Intuition & Approach:
                 </span>
@@ -405,7 +405,7 @@ export const CodingSandboxView: React.FC = () => {
 
               {/* Edge Cases / Bugs */}
               {analysisResult.bugsOrWarnings && analysisResult.bugsOrWarnings.length > 0 && (
-                <div className="p-3.5 rounded-2xl bg-rose-950/20 border border-rose-500/30 space-y-1.5">
+                <div className="p-3.5 rounded-lg bg-rose-950/20 border border-rose-500/30 space-y-1.5">
                   <span className="text-xs font-bold text-rose-300 flex items-center gap-1.5">
                     <Bug className="h-3.5 w-3.5 text-rose-400" /> Edge Cases to Address:
                   </span>
@@ -433,7 +433,7 @@ export const CodingSandboxView: React.FC = () => {
                     </button>
                   </div>
 
-                  <pre className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-emerald-300/90 font-mono overflow-x-auto leading-relaxed">
+                  <pre className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs text-emerald-300/90 font-mono overflow-x-auto leading-relaxed">
                     {analysisResult.suggestedSolution}
                   </pre>
                 </div>

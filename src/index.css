@@ -1,64 +1,136 @@
 @import "tailwindcss";
 
+/*
+  AskMeAi design system — "Ink & Signal".
+  Principles:
+    · Ink, not glow: neutral near-black surfaces, hairline borders, flat panels.
+      No glassmorphism, no decorative gradients, no colored shadows.
+    · Signal, not decoration: emerald = live/active/primary only, amber = credits,
+      rose = danger. Everything else is ink and gray.
+    · Three voices: Inter Tight (UI), JetBrains Mono (labels, data, buttons),
+      Instrument Serif (display statements only).
+*/
+@theme {
+  --font-sans: "Inter Tight", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Instrument Serif", Georgia, serif;
+
+  /* Neutral ink palette — no blue cast (overrides Tailwind's slate). */
+  --color-slate-950: #0a0a0b;
+  --color-slate-900: #101013;
+  --color-slate-850: #141417;
+  --color-slate-800: #1b1b1f;
+  --color-slate-700: #27272a;
+  --color-slate-600: #3f3f46;
+  --color-slate-500: #71717a;
+  --color-slate-400: #a1a1aa;
+  --color-slate-300: #d4d4d8;
+  --color-slate-200: #e4e4e7;
+  --color-slate-100: #f4f4f5;
+}
+
 @layer base {
   :root {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
     color-scheme: dark;
   }
 
-  code, pre, kbd {
-    font-family: 'JetBrains Mono', monospace;
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+
+  /* Hairline focus: one consistent ring language across the app. */
+  :where(button, a, input, select, textarea):focus-visible {
+    outline: 1px solid rgba(52, 211, 153, 0.6);
+    outline-offset: 1px;
   }
 }
 
-/* Custom Scrollbars */
+/* ── Micro label: the mono uppercase label used across panels ───────────── */
+.micro {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-slate-500);
+}
+
+/* ── Display: serif statements (login hero, empty states) ───────────────── */
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* ── Panel: the one surface shape (flat, hairline, 12px radius) ─────────── */
+.panel {
+  background: var(--color-slate-900);
+  border: 1px solid var(--color-slate-800);
+  border-radius: 12px;
+}
+
+/* ── Buttons: mono, uppercase, flat. Signal green = primary only. ───────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.625rem 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--color-emerald-400);
+  color: #052e1c;
+}
+.btn-primary:hover {
+  background: #6ee7b7;
+}
+
+.btn-ghost {
+  background: var(--color-slate-900);
+  border-color: var(--color-slate-800);
+  color: var(--color-slate-300);
+}
+.btn-ghost:hover {
+  background: var(--color-slate-800);
+  color: var(--color-slate-100);
+}
+
+/* ── Scrollbars: thin, neutral, quiet ───────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.8);
+  background: #27272a;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 1);
-}
-
-/* Glassmorphism utilities */
-.glass-panel {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.glass-card {
-  background: rgba(30, 41, 59, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.glass-card-hover {
-  transition: all 0.2s ease-in-out;
-}
-
-.glass-card-hover:hover {
-  background: rgba(30, 41, 59, 0.85);
-  border-color: rgba(52, 211, 153, 0.3);
-  transform: translateY(-2px);
-}
-
-.glow-emerald {
-  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.25);
-}
-
-.glow-cyan {
-  box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.25);
+  background: #3f3f46;
 }

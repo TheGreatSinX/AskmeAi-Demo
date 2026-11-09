@@ -210,7 +210,7 @@ export const MockInterviewView: React.FC = () => {
     return (
       <div className="max-w-3xl mx-auto space-y-6 pb-12">
         <div className="text-center space-y-3 pt-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-500/20 border border-purple-500/40 mx-auto">
+          <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-purple-500/20 border border-purple-500/40 mx-auto">
             <Bot className="h-7 w-7 text-purple-300" />
           </div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Mock Interview</h1>
@@ -220,7 +220,7 @@ export const MockInterviewView: React.FC = () => {
           </p>
         </div>
 
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 lg:p-7 shadow-lg space-y-5">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 lg:p-7  space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
@@ -279,7 +279,7 @@ export const MockInterviewView: React.FC = () => {
           <button
             onClick={startMock}
             disabled={isFetching}
-            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-purple-500 to-fuchsia-400 hover:from-purple-400 hover:to-fuchsia-300 text-slate-950 shadow-lg shadow-purple-500/25 transition-all disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm bg-emerald-400 text-[#052e1c] hover:bg-emerald-300 transition-all disabled:opacity-50"
           >
             {isFetching ? 'Preparing your interviewer…' : (<><Play className="h-4 w-4 fill-slate-950" /> Start Mock Interview</>)}
           </button>
@@ -292,8 +292,8 @@ export const MockInterviewView: React.FC = () => {
   if (phase === 'done') {
     return (
       <div className="max-w-4xl mx-auto space-y-6 pb-12">
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-8 text-center space-y-4 shadow-lg">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/20 border border-amber-500/40 mx-auto">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-8 text-center space-y-4 ">
+          <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-amber-500/20 border border-amber-500/40 mx-auto">
             <Trophy className="h-7 w-7 text-amber-300" />
           </div>
           <div>
@@ -352,7 +352,7 @@ export const MockInterviewView: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-5 pb-12">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl border border-slate-800 bg-slate-900/80 shadow-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-lg border border-slate-800 bg-slate-900/80 ">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 border border-purple-500/40">
             <Bot className="h-5 w-5 text-purple-300 animate-pulse" />
@@ -397,10 +397,10 @@ export const MockInterviewView: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Question + answer */}
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg space-y-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-5  space-y-4">
           {question ? (
             <>
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-purple-500/30 space-y-2">
+              <div className="p-4 rounded-lg bg-slate-950/80 border border-purple-500/30 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-extrabold text-purple-300 uppercase tracking-wider">
                     Question {round} · {question.category}
@@ -474,7 +474,7 @@ export const MockInterviewView: React.FC = () => {
         </div>
 
         {/* Evaluation feed */}
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg space-y-4 lg:max-h-[680px] lg:overflow-y-auto">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-5  space-y-4 lg:max-h-[680px] lg:overflow-y-auto">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <span className="text-xs font-bold text-white">Coaching Feedback</span>
             {evaluations.length > 0 && (
@@ -514,7 +514,7 @@ const EvaluationCard: React.FC<{
   expanded: boolean;
   onToggle: () => void;
 }> = ({ evaluation, index, expanded, onToggle }) => (
-  <div className="rounded-2xl border border-slate-800 bg-slate-950/60 overflow-hidden">
+  <div className="rounded-lg border border-slate-800 bg-slate-950/60 overflow-hidden">
     <div className="p-4 flex items-start gap-3">
       <div
         className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border-2 bg-slate-900 font-mono text-sm font-extrabold ${scoreColor(

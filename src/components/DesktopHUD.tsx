@@ -70,7 +70,7 @@ export const DesktopHUD: React.FC = () => {
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-50 flex flex-col rounded-2xl border border-emerald-500/30 bg-slate-950/95 shadow-2xl backdrop-blur-xl transition-all duration-200 ${
+      className={`fixed bottom-5 right-5 z-50 flex flex-col rounded-lg border border-emerald-500/30 bg-slate-950/95   transition-all duration-200 ${
         hudMinimized ? 'w-80 h-14' : 'w-[420px] max-h-[580px]'
       }`}
     >
@@ -148,7 +148,7 @@ export const DesktopHUD: React.FC = () => {
                 </p>
               </div>
             ) : latestAnswer ? (
-              <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-3.5 space-y-2.5 shadow-md">
+              <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-3.5 space-y-2.5 ">
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-xs font-bold text-emerald-300 leading-snug">
                     Q: &ldquo;{latestAnswer.questionText}&rdquo;

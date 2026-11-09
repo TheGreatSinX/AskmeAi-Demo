@@ -1,12 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signInWithPopup,
-  sendPasswordResetEmail,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  updateProfile,
   GoogleAuthProvider,
   type User as FirebaseUser,
 } from 'firebase/auth';
@@ -32,11 +28,8 @@ interface AuthContextType {
   enterDemo: () => void;
   /** True when the app may render its main shell (signed in, or running in demo mode). */
   ready: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  /** The only sign-in path: Google via Firebase popup. */
   signInWithGoogle: () => Promise<void>;
-  /** Sends a password-reset e-mail; throws a friendly message on failure. */
-  sendPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -45,13 +38,6 @@ const AuthContext = createContext<AuthContextType | null>(null);
 function friendlyAuthError(err: any): string {
   const code = err?.code || '';
   const map: Record<string, string> = {
-    'auth/invalid-credential': 'Incorrect email or password.',
-    'auth/wrong-password': 'Incorrect email or password.',
-    'auth/user-not-found': 'No account found for that email.',
-    'auth/email-already-in-use': 'An account with that email already exists.',
-    'auth/weak-password': 'Password must be at least 6 characters.',
-    'auth/invalid-email': 'Please enter a valid email address.',
-    'auth/missing-email': 'Please enter your email address.',
     'auth/popup-closed-by-user': 'Sign-in was cancelled before completion.',
     'auth/popup-blocked': 'Your browser blocked the sign-in popup. Allow popups and retry.',
     'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
@@ -158,41 +144,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    if (!auth) throw new Error('Firebase Auth is not configured.');
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-    } catch (err: any) {
-      throw new Error(friendlyAuthError(err));
-    }
-  }, []);
-
-  const signUp = useCallback(async (email: string, password: string, displayName: string) => {
-    if (!auth) throw new Error('Firebase Auth is not configured.');
-    try {
-      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      if (displayName.trim()) {
-        await updateProfile(cred.user, { displayName: displayName.trim() });
-        await cred.user.getIdToken(true);
-      }
-    } catch (err: any) {
-      throw new Error(friendlyAuthError(err));
-    }
-  }, []);
-
   const signInWithGoogle = useCallback(async () => {
     if (!auth) throw new Error('Firebase Auth is not configured.');
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
-    } catch (err: any) {
-      throw new Error(friendlyAuthError(err));
-    }
-  }, []);
-
-  const sendPasswordReset = useCallback(async (email: string) => {
-    if (!auth) throw new Error('Firebase Auth is not configured.');
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
     } catch (err: any) {
       throw new Error(friendlyAuthError(err));
     }
@@ -203,8 +158,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setDemoEntered(true);
   }, []);
 
+  // Escape hatch for static hosts without an API: ?demo=1 skips the Google
+  // gate and boots straight into the in-browser demo backend.
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get('demo') === '1') enterDemo();
+    } catch {
+      /* no window/location in exotic runtimes; gate renders normally */
+    }
+  }, [enterDemo]);
+
   const signOut = useCallback(async () => {
-    setDemoEntered(false); // back to the login screen (demo button stays if no backend)
+    setDemoEntered(false); // back to the login screen
     if (auth) await firebaseSignOut(auth);
   }, []);
 
@@ -218,10 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     enterDemo,
     ready:
       demoEntered || (authEnabled ? Boolean(firebaseUser) && !initializing : !configError),
-    signIn,
-    signUp,
     signInWithGoogle,
-    sendPasswordReset,
     signOut,
   };
 

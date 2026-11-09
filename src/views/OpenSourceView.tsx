@@ -32,8 +32,7 @@ export const OpenSourceView: React.FC = () => {
   return (
     <div className="space-y-7 max-w-7xl mx-auto pb-12">
       {/* Top Banner */}
-      <div className="relative overflow-hidden rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 p-6 lg:p-8 shadow-xl">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-72 w-72 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none"></div>
+      <div className="relative overflow-hidden rounded-xl border border-emerald-500/30 bg-slate-900 p-6 lg:p-8 ">
 
         <div className="relative z-10 space-y-3">
           <div className="flex items-center gap-2">
@@ -55,7 +54,7 @@ export const OpenSourceView: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               onClick={handleCopyClone}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/25 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950   transition-all"
             >
               {copiedClone ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               <span>{copiedClone ? 'Copied Commands' : 'Clone & Self-Host'}</span>
@@ -77,7 +76,7 @@ export const OpenSourceView: React.FC = () => {
 
       {/* Feature & Freedom Highlights */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="p-6 rounded-3xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm space-y-3">
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60  space-y-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
             <Sparkles className="h-5 w-5" />
           </div>
@@ -87,7 +86,7 @@ export const OpenSourceView: React.FC = () => {
           </p>
         </div>
 
-        <div className="p-6 rounded-3xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm space-y-3">
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60  space-y-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
             <ShieldCheck className="h-5 w-5" />
           </div>
@@ -97,7 +96,7 @@ export const OpenSourceView: React.FC = () => {
           </p>
         </div>
 
-        <div className="p-6 rounded-3xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm space-y-3">
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/60  space-y-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
             <Cpu className="h-5 w-5" />
           </div>
@@ -109,7 +108,7 @@ export const OpenSourceView: React.FC = () => {
       </div>
 
       {/* Self-Hosting Guide */}
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 lg:p-7 shadow-lg space-y-4">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 lg:p-7  space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <Terminal className="h-4 w-4 text-emerald-400" />
@@ -123,7 +122,7 @@ export const OpenSourceView: React.FC = () => {
             You can run AskMeAi entirely on your local machine or deploy it to Docker, Cloud Run, or any VPS:
           </p>
 
-          <pre className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-emerald-300 font-mono overflow-x-auto leading-relaxed">
+          <pre className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs text-emerald-300 font-mono overflow-x-auto leading-relaxed">
 {`# 1. Clone the repository
 git clone https://github.com/askmeai/askmeai-copilot.git
 cd askmeai-copilot
@@ -143,7 +142,7 @@ npm run dev
 
       {/* Community Contribution Pillars */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="p-6 rounded-3xl border border-slate-800 bg-slate-900/70 space-y-3">
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/70 space-y-3">
           <div className="flex items-center gap-2 text-white font-bold text-sm">
             <Users className="h-4 w-4 text-emerald-400" />
             <span>How to Contribute</span>
@@ -156,7 +155,7 @@ npm run dev
           </ul>
         </div>
 
-        <div className="p-6 rounded-3xl border border-slate-800 bg-slate-900/70 space-y-3">
+        <div className="p-6 rounded-xl border border-slate-800 bg-slate-900/70 space-y-3">
           <div className="flex items-center gap-2 text-white font-bold text-sm">
             <BookOpen className="h-4 w-4 text-cyan-400" />
             <span>Open Source License</span>

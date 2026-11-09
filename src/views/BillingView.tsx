@@ -122,10 +122,10 @@ export const BillingView: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
       {/* Wallet summary */}
-      <div className="rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 p-6 lg:p-7 shadow-xl space-y-4">
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 lg:p-7 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15 border border-amber-500/30">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-500/15 border border-amber-500/30">
               <Zap className="h-6 w-6 text-amber-300 fill-amber-300" />
             </div>
             <div>
@@ -177,7 +177,7 @@ export const BillingView: React.FC = () => {
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-3xl border bg-slate-900/70 p-6 space-y-4 shadow-lg transition-all ${
+                className={`relative rounded-xl border bg-slate-900/70 p-6 space-y-4  transition-all ${
                   active ? `${accent} ring-1 ring-inset ring-current` : 'border-slate-800'
                 }`}
               >
@@ -224,7 +224,7 @@ export const BillingView: React.FC = () => {
                     active
                       ? 'bg-slate-800 text-slate-400 border border-slate-700 cursor-default'
                       : plan.popular
-                      ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-slate-950 hover:opacity-90'
+                      ? 'bg-emerald-400 text-[#052e1c] hover:bg-emerald-300'
                       : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
                   }`}
                 >
@@ -245,7 +245,7 @@ export const BillingView: React.FC = () => {
           {PACKS.map((pack) => (
             <div
               key={pack.credits}
-              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 flex items-center justify-between gap-4 shadow-md"
+              className="rounded-lg border border-slate-800 bg-slate-900/70 p-5 flex items-center justify-between gap-4 "
             >
               <div>
                 <div className="text-xl font-extrabold text-white font-mono">
@@ -269,7 +269,7 @@ export const BillingView: React.FC = () => {
       </div>
 
       {/* Transaction history */}
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg space-y-4">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <History className="h-4 w-4 text-cyan-400" /> Transaction History

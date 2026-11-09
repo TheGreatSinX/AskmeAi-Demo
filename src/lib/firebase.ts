@@ -3,18 +3,48 @@ import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth';
 
 const env = import.meta.env;
 
+/**
+ * PUBLIC Firebase web configuration.
+ *
+ * These values identify the Firebase project to the browser — they are the
+ * standard client-side config that every Firebase web app ships in its
+ * bundle by design (Firebase docs: "the Firebase web config is safe to
+ * expose in client-side code"). They grant no access on their own: Firestore
+ * security rules and App Check decide what a client may do.
+ *
+ * They are NOT server credentials. Gemini keys, backup-provider keys and
+ * firebase-admin credentials never leave the server (.env, git-ignored).
+ *
+ * `VITE_FIREBASE_*` environment variables override these defaults, so a
+ * different deployment (fork, staging) can point elsewhere without editing
+ * source. Keeping the defaults committed is what lets the static Cloudflare
+ * deploy show a working Google sign-in instead of silently skipping auth.
+ */
+const PUBLIC_WEB_CONFIG = {
+  apiKey: 'AIzaSyBE2_HbiZIijisvntgAlXxzmm3xbdzZ9JI',
+  authDomain: 'socintel-111625-35761285-e248d.firebaseapp.com',
+  projectId: 'socintel-111625-35761285-e248d',
+  storageBucket: 'socintel-111625-35761285-e248d.firebasestorage.app',
+  messagingSenderId: '864515612488',
+  appId: '1:864515612488:web:fe3b243abbfd7dc59c5d7d',
+};
+
 export const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY as string | undefined,
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined,
-  projectId: env.VITE_FIREBASE_PROJECT_ID as string | undefined,
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET as string | undefined,
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID as string | undefined,
-  appId: env.VITE_FIREBASE_APP_ID as string | undefined,
+  apiKey: (env.VITE_FIREBASE_API_KEY as string | undefined) || PUBLIC_WEB_CONFIG.apiKey,
+  authDomain: (env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined) || PUBLIC_WEB_CONFIG.authDomain,
+  projectId: (env.VITE_FIREBASE_PROJECT_ID as string | undefined) || PUBLIC_WEB_CONFIG.projectId,
+  storageBucket:
+    (env.VITE_FIREBASE_STORAGE_BUCKET as string | undefined) || PUBLIC_WEB_CONFIG.storageBucket,
+  messagingSenderId:
+    (env.VITE_FIREBASE_MESSAGING_SENDER_ID as string | undefined) || PUBLIC_WEB_CONFIG.messagingSenderId,
+  appId: (env.VITE_FIREBASE_APP_ID as string | undefined) || PUBLIC_WEB_CONFIG.appId,
 };
 
 /**
- * Firebase Auth is optional: without VITE_FIREBASE_* variables the app runs in
- * local demo mode against the seeded developer account.
+ * Firebase Auth is optional only in the degenerate case where even the
+ * public config is missing (stripped build). With the committed defaults
+ * this is true on every deployment, so the Google sign-in gate is active
+ * everywhere — including the static Cloudflare site.
  */
 export const authEnabled = Boolean(
   firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId

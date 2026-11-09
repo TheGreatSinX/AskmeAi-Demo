@@ -7,8 +7,6 @@ import {
   Mic,
   MicOff,
   Radio,
-  Play,
-  Pause,
   Square,
   Sparkles,
   Copy,
@@ -16,16 +14,10 @@ import {
   RotateCw,
   Send,
   Zap,
-  Bookmark,
-  Share2,
   Volume2,
-  Sliders,
   Layers,
-  HelpCircle,
   Clock,
   Laptop,
-  CheckCircle2,
-  Heart,
   Camera,
   Image as ImageIcon,
 } from 'lucide-react';
@@ -259,138 +251,131 @@ export const LiveStudioView: React.FC = () => {
     }
   };
 
+  const toolBtn =
+    'flex items-center gap-1.5 rounded-lg border px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] transition-colors';
+
   if (!activeSession) {
     return (
-      <div className="max-w-3xl mx-auto py-16 text-center space-y-6">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 mx-auto">
-          <Radio className="h-8 w-8" />
+      <div className="mx-auto max-w-2xl space-y-6 py-20 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg border border-slate-700 bg-slate-900">
+          <Radio className="h-5 w-5 text-slate-500" />
         </div>
-        <div className="space-y-2">
-          <h2 className="text-2xl font-bold text-white">Live Studio Inactive</h2>
-          <p className="text-sm text-slate-400 max-w-md mx-auto">
-            Configure your target role and company on the Dashboard to begin real-time interview transcription and AI copilot guidance.
-          </p>
-        </div>
+        <p className="micro">Live studio</p>
+        <h2 className="display text-3xl text-slate-100">The studio is idle.</h2>
+        <p className="mx-auto max-w-md text-sm leading-relaxed text-slate-400">
+          Configure your target role and company on the dashboard to begin real-time transcription and copilot
+          guidance.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-12">
-      {/* Studio Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-md shadow-md">
+    <div className="mx-auto max-w-7xl space-y-4 pb-12">
+      {/* Studio header bar */}
+      <div className="panel flex flex-wrap items-center justify-between gap-4 p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-            <Radio className="h-5 w-5 animate-pulse" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/10">
+            <Radio className="h-4 w-4 animate-pulse text-emerald-400" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-white tracking-tight">
-                {activeSession.targetCompany}
-              </h1>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
+              <h1 className="text-sm font-semibold tracking-tight text-slate-100">{activeSession.targetCompany}</h1>
+              <span className="rounded border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[10.5px] text-slate-400">
                 {activeSession.targetRole}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="flex items-center gap-1 font-mono text-emerald-400">
+            <div className="mt-1 flex items-center gap-2 font-mono text-[10.5px] text-slate-500">
+              <span className="flex items-center gap-1 text-emerald-400">
                 <Clock className="h-3 w-3" /> {formatTimer(elapsedSeconds)}
               </span>
-              <span>•</span>
-              <span
-                title="Credit balance"
-                className="flex items-center gap-1 font-mono text-amber-300 font-semibold"
-              >
-                <Zap className="h-3 w-3 fill-amber-300" /> {wallet?.balanceCredits ?? '—'} cr
+              <span>·</span>
+              <span title="Credit balance" className="flex items-center gap-1 text-amber-400">
+                <Zap className="h-3 w-3 fill-amber-400" /> {wallet?.balanceCredits ?? '—'} cr
               </span>
-              <span className="hidden sm:inline">•</span>
-              <span className="hidden sm:inline px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-semibold uppercase">
-                {activeSession.mode === 'meeting' ? 'Regular Meeting' : 'Interview'}
+              <span className="hidden sm:inline">·</span>
+              <span className="hidden uppercase tracking-[0.1em] sm:inline">
+                {activeSession.mode === 'meeting' ? 'Regular meeting' : 'Interview'}
               </span>
-              <span className="hidden sm:inline px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono">
-                {activeSession.language || 'en-US'}
-              </span>
+              <span className="hidden sm:inline">{activeSession.language || 'en-US'}</span>
             </div>
           </div>
         </div>
 
-        {/* Audio Visualizer & Source Toggles */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Audio visualizer & source toggles */}
+        <div className="flex flex-wrap items-center gap-2">
           <AudioVisualizer level={audioState.audioLevel} isActive={audioState.isListening} />
 
-          {/* Mic Toggle */}
           <button
             onClick={audioState.isListening ? stopListening : startListening}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+            className={`${toolBtn} ${
               audioState.isListening
-                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-sm shadow-emerald-500/20'
-                : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200'
             }`}
           >
-            {audioState.isListening ? <Mic className="h-4 w-4 text-emerald-400" /> : <MicOff className="h-4 w-4 text-slate-400" />}
-            <span>{audioState.isListening ? 'Mic Active' : 'Enable Mic'}</span>
+            {audioState.isListening ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
+            <span>{audioState.isListening ? 'Mic active' : 'Enable mic'}</span>
           </button>
 
-          {/* Meeting System Audio Capture */}
           <button
             onClick={toggleMeetingAudio}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-              audioState.isMeetingAudioActive
-                ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300 shadow-sm shadow-cyan-500/20'
-                : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
-            }`}
             title="Capture meeting audio from Zoom, Meet, or Teams tab/window"
+            className={`${toolBtn} ${
+              audioState.isMeetingAudioActive
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200'
+            }`}
           >
-            <Volume2 className="h-4 w-4 text-cyan-400" />
+            <Volume2 className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">
-              {audioState.isMeetingAudioActive ? 'Meeting Audio: On' : 'Capture Meeting Audio'}
+              {audioState.isMeetingAudioActive ? 'Meeting audio on' : 'Capture meeting audio'}
             </span>
           </button>
 
-          {/* Floating HUD Trigger */}
           <button
             onClick={openHUD}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
-            title="Launch Floating Transparent HUD"
+            title="Launch floating HUD"
+            className={`${toolBtn} border-slate-800 bg-slate-950 text-slate-400 hover:text-slate-200`}
           >
-            <Laptop className="h-4 w-4 text-emerald-400" />
+            <Laptop className="h-3.5 w-3.5" />
             <span className="hidden md:inline">Floating HUD</span>
           </button>
 
-          {/* End Session Button */}
           <button
             onClick={() => endSession(activeSession.id)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition-colors"
+            className={`${toolBtn} border-rose-500/40 bg-rose-500/10 text-rose-400 hover:bg-rose-500/15`}
           >
-            <Square className="h-3.5 w-3.5 fill-rose-300" />
-            <span>End Session</span>
+            <Square className="h-3 w-3 fill-rose-400" />
+            <span>End session</span>
           </button>
         </div>
       </div>
 
-      {/* Main Studio Grid: Left Transcripts Stream, Right Grounded Answer Engine */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left Column: Live Audio Transcripts Stream (5 Cols) */}
-        <div className="lg:col-span-5 flex flex-col h-[680px] rounded-3xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+      {/* Studio grid: transcripts stream + answer engine */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        {/* Left: live transcription */}
+        <div className="panel flex h-[680px] flex-col overflow-hidden p-4 lg:col-span-5">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white">Live Transcription</span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 font-mono">
+              <span className="micro">Live transcription</span>
+              <span className="rounded border border-slate-800 bg-slate-950 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
                 {liveTranscripts.length} lines
               </span>
             </div>
 
-            {/* Quick Test Question Simulator dropdown */}
+            {/* Quick test question simulator */}
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-400 hidden sm:inline">Test Prompts:</span>
+              <span className="hidden font-mono text-[10px] uppercase tracking-[0.1em] text-slate-600 sm:inline">
+                Test prompts:
+              </span>
               <button
                 onClick={() =>
                   simulateInterviewQuestion(
                     'Could you walk us through a time you resolved an urgent production incident under high traffic?'
                   )
                 }
-                className="px-2 py-0.5 text-[10px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                className="rounded border border-slate-800 bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-slate-400 transition-colors hover:text-slate-200"
               >
                 Incident
               </button>
@@ -400,20 +385,20 @@ export const LiveStudioView: React.FC = () => {
                     'How do you design an idempotent payment processing system across distributed microservices?'
                   )
                 }
-                className="px-2 py-0.5 text-[10px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                className="rounded border border-slate-800 bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-slate-400 transition-colors hover:text-slate-200"
               >
                 Idempotency
               </button>
             </div>
           </div>
 
-          {/* Transcripts List */}
-          <div className="flex-1 overflow-y-auto pr-1 py-3 space-y-3">
+          {/* Transcript list */}
+          <div className="flex-1 space-y-3 overflow-y-auto py-3 pr-1">
             {liveTranscripts.length === 0 ? (
-              <div className="py-24 text-center space-y-3">
-                <Mic className="h-8 w-8 text-slate-600 mx-auto animate-pulse" />
-                <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                  Audio engine is listening. When the interviewer speaks, spoken lines will appear here in real time.
+              <div className="space-y-3 py-24 text-center">
+                <Mic className="mx-auto h-7 w-7 animate-pulse text-slate-700" />
+                <p className="mx-auto max-w-xs text-xs leading-relaxed text-slate-500">
+                  The audio engine is listening. When the interviewer speaks, lines appear here in real time.
                 </p>
                 <button
                   onClick={() =>
@@ -421,9 +406,9 @@ export const LiveStudioView: React.FC = () => {
                       'Tell me about your architectural experience with Kafka and distributed streaming at Stripe.'
                     )
                   }
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors"
+                  className="btn btn-ghost"
                 >
-                  Simulate Question
+                  Simulate question
                 </button>
               </div>
             ) : (
@@ -436,34 +421,40 @@ export const LiveStudioView: React.FC = () => {
                       if (match) setSelectedAnswer(match);
                     }
                   }}
-                  className={`p-3 rounded-2xl border transition-all ${
+                  className={`rounded-lg border p-3 transition-colors ${
                     t.isQuestion
-                      ? 'border-emerald-500/40 bg-emerald-950/20 cursor-pointer hover:bg-emerald-950/30'
+                      ? 'cursor-pointer border-emerald-500/40 bg-emerald-500/5 hover:bg-emerald-500/10'
                       : t.speaker === 'interviewer'
-                      ? 'border-slate-800 bg-slate-950/60'
-                      : 'border-slate-800/60 bg-slate-900/60 text-slate-300'
+                        ? 'border-slate-800 bg-slate-950'
+                        : 'border-slate-800 bg-slate-900'
                   }`}
                 >
-                  <div className="flex items-center justify-between text-[11px] mb-1">
+                  <div className="mb-1 flex items-center justify-between text-[11px]">
                     <span
-                      className={`font-semibold capitalize flex items-center gap-1.5 ${
-                        t.speaker === 'interviewer' ? 'text-amber-400' : 'text-cyan-400'
+                      className={`flex items-center gap-1.5 capitalize ${
+                        t.speaker === 'interviewer' ? 'font-medium text-slate-200' : 'text-slate-500'
                       }`}
                     >
-                      <span className="h-1.5 w-1.5 rounded-full bg-current"></span>
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          t.speaker === 'interviewer' ? 'bg-slate-300' : 'bg-slate-600'
+                        }`}
+                      ></span>
                       {t.speaker}
                     </span>
-                    <span className="text-slate-500 font-mono text-[10px]">{t.timestamp}</span>
+                    <span className="font-mono text-[10px] text-slate-600">{t.timestamp}</span>
                   </div>
 
-                  <p className="text-xs text-slate-200 leading-relaxed">{t.text}</p>
+                  <p className="text-xs leading-relaxed text-slate-300">{t.text}</p>
 
                   {t.isQuestion && (
                     <div className="mt-2 flex items-center justify-between">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
-                        <Sparkles className="h-2.5 w-2.5" /> Question Detected ({Math.round(t.confidence * 100)}%)
+                      <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.1em] text-emerald-400">
+                        <Sparkles className="h-2.5 w-2.5" /> Question · {Math.round(t.confidence * 100)}%
                       </span>
-                      <span className="text-[10px] text-slate-400 uppercase font-mono">{t.category || 'Behavioral'}</span>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-slate-600">
+                        {t.category || 'Behavioral'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -472,17 +463,17 @@ export const LiveStudioView: React.FC = () => {
             <div ref={transcriptEndRef} />
           </div>
 
-          {/* Manual Input Footer + Screenshot Answer */}
-          <div className="pt-3 border-t border-slate-800 space-y-2">
+          {/* Manual input footer + screenshot answer */}
+          <div className="space-y-2 border-t border-slate-800 pt-3">
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleScreenCapture}
                 disabled={isGenerating || isCapturing}
                 title="Capture a screen with the question, get an answer"
-                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-medium transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200 disabled:opacity-50"
               >
-                <Camera className="h-3.5 w-3.5 text-cyan-400" />
+                <Camera className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{isCapturing ? 'Capturing…' : 'Screenshot'}</span>
               </button>
               <button
@@ -490,9 +481,9 @@ export const LiveStudioView: React.FC = () => {
                 onClick={() => photoInputRef.current?.click()}
                 disabled={isGenerating}
                 title="Upload a photo of the question"
-                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-medium transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200 disabled:opacity-50"
               >
-                <ImageIcon className="h-3.5 w-3.5 text-amber-400" />
+                <ImageIcon className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Photo</span>
               </button>
               <input
@@ -502,7 +493,7 @@ export const LiveStudioView: React.FC = () => {
                 onChange={handlePhotoUpload}
                 className="hidden"
               />
-              <span className="text-[10px] text-slate-500 hidden md:inline">
+              <span className="hidden text-[10px] text-slate-600 md:inline">
                 Screenshot or photo of a question → grounded answer
               </span>
             </div>
@@ -512,13 +503,14 @@ export const LiveStudioView: React.FC = () => {
                 type="text"
                 value={manualInput}
                 onChange={(e) => setManualInput(e.target.value)}
-                placeholder="Quietly type or paste interviewer question..."
-                className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                placeholder="Quietly type or paste an interviewer question…"
+                className="flex-1 rounded-lg border border-slate-800 bg-slate-950 px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-600 transition-colors focus:border-emerald-500/60 focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={isGenerating || !manualInput.trim()}
-                className="p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold disabled:opacity-40 transition-colors"
+                aria-label="Ask question"
+                className="rounded-lg bg-emerald-400 p-2.5 text-[#052e1c] transition-colors hover:bg-emerald-300 disabled:opacity-40"
               >
                 <Send className="h-4 w-4" />
               </button>
@@ -526,33 +518,29 @@ export const LiveStudioView: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: AI Answer Engine & STAR Breakdown (7 Cols) */}
-        <div className="lg:col-span-7 flex flex-col h-[680px] rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg overflow-hidden space-y-4">
-          {/* Header & Style Switcher */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <h2 className="text-sm font-bold text-white">AI Grounded Talking Points</h2>
-            </div>
+        {/* Right: answer engine */}
+        <div className="panel flex h-[680px] flex-col space-y-4 overflow-hidden p-5 lg:col-span-7">
+          {/* Header & style switcher */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <p className="micro">Grounded talking points</p>
 
-            <div className="flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
               {[
-                { id: 'star', label: 'STAR Format' },
-                { id: 'concise', label: 'Concise Pitch' },
-                { id: 'technical', label: 'Deep Technical' },
-                { id: 'step_by_step', label: 'Step-by-Step' },
+                { id: 'star', label: 'STAR' },
+                { id: 'concise', label: 'Concise' },
+                { id: 'technical', label: 'Technical' },
+                { id: 'step_by_step', label: 'Step-by-step' },
                 { id: 'bullets', label: 'Bullets' },
-                { id: 'full_script', label: 'Full Script' },
+                { id: 'full_script', label: 'Full script' },
               ].map((style) => (
                 <button
                   key={style.id}
                   onClick={() => setAnswerStyle(style.id as any)}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                  aria-pressed={answerStyle === style.id}
+                  className={`rounded-md px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.06em] transition-colors ${
                     answerStyle === style.id
-                      ? 'bg-emerald-500 text-slate-950 shadow-sm font-bold'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-emerald-400 text-[#052e1c]'
+                      : 'text-slate-500 hover:text-slate-300'
                   }`}
                 >
                   {style.label}
@@ -561,35 +549,36 @@ export const LiveStudioView: React.FC = () => {
             </div>
           </div>
 
-          {/* Active / Selected Answer Display */}
-          <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+          {/* Active / selected answer display */}
+          <div className="flex-1 space-y-4 overflow-y-auto pr-1">
             {isGenerating ? (
-              <div className="h-full flex flex-col items-center justify-center text-center space-y-3">
-                <div className="h-12 w-12 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin"></div>
+              <div className="flex h-full flex-col items-center justify-center space-y-3 text-center">
+                <div className="h-8 w-8 animate-spin rounded-full border border-emerald-400 border-t-transparent"></div>
                 <div className="space-y-1">
-                  <h3 className="text-sm font-bold text-white">Synthesizing Answer with Gemini 3.8 Flash...</h3>
-                  <p className="text-xs text-slate-400 max-w-sm">
+                  <p className="micro">Synthesizing</p>
+                  <p className="text-sm font-medium text-slate-200">Formulating a grounded answer…</p>
+                  <p className="mx-auto max-w-sm text-xs leading-relaxed text-slate-500">
                     Cross-referencing your authentic achievements at {activeSession.targetCompany} with resume context.
                   </p>
                 </div>
               </div>
             ) : selectedAnswer ? (
               <div className="space-y-4 animate-in fade-in duration-200">
-                {/* Question Banner */}
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-start justify-between gap-3">
+                {/* Question banner */}
+                <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 p-3.5">
                   <div>
-                    <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block mb-0.5">
-                      TARGET QUESTION ({selectedAnswer.category.toUpperCase()})
+                    <span className="mb-1 block font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-400">
+                      Target question · {selectedAnswer.category}
                     </span>
-                    <h3 className="text-sm font-bold text-white leading-snug">
+                    <h3 className="text-sm font-medium leading-snug text-slate-100">
                       &ldquo;{selectedAnswer.questionText}&rdquo;
                     </h3>
                   </div>
 
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className="flex flex-shrink-0 items-center gap-1.5">
                     <button
                       onClick={() => copyAnswer(selectedAnswer.answerText, selectedAnswer.id)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+                      className="flex items-center gap-1 rounded border border-slate-800 bg-slate-900 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200"
                     >
                       {copiedId === selectedAnswer.id ? (
                         <>
@@ -603,96 +592,81 @@ export const LiveStudioView: React.FC = () => {
                     </button>
                     <button
                       onClick={handleRegenerate}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-                      title="Regenerate Answer with current style"
+                      title="Regenerate answer with current style"
+                      className="rounded border border-slate-800 bg-slate-900 p-1.5 text-slate-400 transition-colors hover:text-slate-200"
                     >
                       <RotateCw className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
 
-                {/* STAR Structured Grid if STAR breakdown exists */}
+                {/* STAR structured grid */}
                 {selectedAnswer.starBreakdown && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-amber-500/20 space-y-1">
-                      <span className="text-[10px] font-extrabold text-amber-400 tracking-wider">1. SITUATION</span>
-                      <p className="text-xs text-slate-200 leading-relaxed">
-                        {selectedAnswer.starBreakdown.situation}
-                      </p>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-cyan-500/20 space-y-1">
-                      <span className="text-[10px] font-extrabold text-cyan-400 tracking-wider">2. TASK</span>
-                      <p className="text-xs text-slate-200 leading-relaxed">
-                        {selectedAnswer.starBreakdown.task}
-                      </p>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-emerald-500/20 space-y-1">
-                      <span className="text-[10px] font-extrabold text-emerald-400 tracking-wider">3. ACTION</span>
-                      <p className="text-xs text-slate-200 leading-relaxed">
-                        {selectedAnswer.starBreakdown.action}
-                      </p>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-purple-500/20 space-y-1">
-                      <span className="text-[10px] font-extrabold text-purple-400 tracking-wider">4. RESULT</span>
-                      <p className="text-xs text-slate-200 leading-relaxed">
-                        {selectedAnswer.starBreakdown.result}
-                      </p>
-                    </div>
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    {[
+                      { n: '01', label: 'Situation', text: selectedAnswer.starBreakdown.situation },
+                      { n: '02', label: 'Task', text: selectedAnswer.starBreakdown.task },
+                      { n: '03', label: 'Action', text: selectedAnswer.starBreakdown.action },
+                      { n: '04', label: 'Result', text: selectedAnswer.starBreakdown.result },
+                    ].map((part) => (
+                      <div key={part.n} className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950 p-3">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                          {part.n} — {part.label}
+                        </span>
+                        <p className="text-xs leading-relaxed text-slate-300">{part.text}</p>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {/* Full Flow Speech Transcript / Narrative */}
+                {/* Full recommended speech response */}
                 <div className="space-y-1.5">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                    Full Recommended Speech Response:
-                  </span>
+                  <span className="micro">Full recommended speech response</span>
                   <AnswerBody
                     text={selectedAnswer.answerText}
-                    className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 text-sm text-slate-100 leading-relaxed whitespace-pre-line font-normal selection:bg-emerald-500/40"
+                    className="whitespace-pre-line rounded-lg border border-slate-800 bg-slate-950 p-4 text-sm font-normal leading-relaxed text-slate-200 selection:bg-emerald-500/30"
                   />
                 </div>
 
-                {/* Grounding Attribution */}
+                {/* Grounding attribution */}
                 {selectedAnswer.groundingSources.length > 0 && (
-                  <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-xs text-slate-500">
                     <span className="flex items-center gap-1.5">
-                      <Layers className="h-3.5 w-3.5 text-emerald-400" />
+                      <Layers className="h-3.5 w-3.5 text-slate-600" />
                       <span>Verified from: {selectedAnswer.groundingSources.join(', ')}</span>
                     </span>
-                    <span className="text-[11px] text-emerald-400 font-medium">Confidence: 96%</span>
+                    <span className="font-mono text-[10.5px] text-emerald-400">Confidence 96%</span>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center space-y-3 py-16">
-                <Sparkles className="h-10 w-10 text-slate-600" />
-                <h3 className="text-sm font-bold text-slate-300">Awaiting Question Input</h3>
-                <p className="text-xs text-slate-500 max-w-sm">
-                  Speak into your microphone or paste an interview question on the left to see instant, personalized talking points.
+              <div className="flex h-full flex-col items-center justify-center space-y-3 py-16 text-center">
+                <Sparkles className="h-7 w-7 text-slate-700" />
+                <p className="micro">Awaiting question</p>
+                <p className="max-w-sm text-xs leading-relaxed text-slate-500">
+                  Speak into your microphone or paste an interview question on the left to see instant, personalized
+                  talking points.
                 </p>
               </div>
             )}
           </div>
 
-          {/* Custom Prompt Context Hint Bar */}
-          <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
+          {/* Custom hint bar */}
+          <div className="flex items-center gap-2 border-t border-slate-800 pt-3">
             <input
               type="text"
               value={customHint}
               onChange={(e) => setCustomHint(e.target.value)}
-              placeholder="Add optional custom hint (e.g. 'Emphasize high availability' or 'Keep it under 30 secs')..."
-              className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              placeholder="Optional hint — e.g. 'emphasize high availability' or 'keep it under 30 secs'"
+              className="flex-1 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-300 placeholder-slate-600 transition-colors focus:border-emerald-500/60 focus:outline-none"
             />
             {selectedAnswer && (
               <button
                 onClick={handleRegenerate}
                 disabled={isGenerating}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-emerald-400 transition-colors whitespace-nowrap"
+                className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-slate-400 transition-colors hover:text-slate-200 disabled:opacity-50"
               >
-                Re-Synthesize
+                Re-synthesize
               </button>
             )}
           </div>

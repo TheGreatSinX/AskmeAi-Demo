@@ -88,7 +88,7 @@ ${n.thankYouEmailDraft}
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-3xl border border-slate-800 bg-slate-900/80 backdrop-blur-md shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-xl border border-slate-800 bg-slate-900/80  ">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
             <ClipboardList className="h-5 w-5" />
@@ -112,7 +112,7 @@ ${n.thankYouEmailDraft}
             </button>
             <button
               onClick={handleCopyMarkdown}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors shadow-md"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors "
             >
               {copied ? <Check className="h-3.5 w-3.5 text-slate-950" /> : <Copy className="h-3.5 w-3.5" />}
               <span>{copied ? 'Copied' : 'Copy Markdown'}</span>
@@ -124,7 +124,7 @@ ${n.thankYouEmailDraft}
       {/* 2-Column Split: Session List vs Report */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Past Sessions (4 cols) */}
-        <div className="lg:col-span-4 rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg space-y-3">
+        <div className="lg:col-span-4 rounded-xl border border-slate-800 bg-slate-900/70 p-5  space-y-3">
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
             Interview Sessions ({sessions.length})
           </h2>
@@ -136,9 +136,9 @@ ${n.thankYouEmailDraft}
                 <div
                   key={s.id}
                   onClick={() => setSelectedSessionId(s.id)}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
                     isSelected
-                      ? 'border-purple-500/50 bg-purple-950/20 shadow-sm'
+                      ? 'border-purple-500/50 bg-purple-950/20 '
                       : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
                   }`}
                 >
@@ -159,7 +159,7 @@ ${n.thankYouEmailDraft}
         </div>
 
         {/* Right: Synthesis Report (8 cols) */}
-        <div className="lg:col-span-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg space-y-5">
+        <div className="lg:col-span-8 rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-5">
           {isLoading ? (
             <div className="py-24 text-center space-y-3">
               <div className="h-10 w-10 rounded-full border-2 border-purple-400 border-t-transparent animate-spin mx-auto"></div>
@@ -189,7 +189,7 @@ ${n.thankYouEmailDraft}
               {sessionData.notes ? (
                 <>
                   {/* Executive Summary */}
-                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+                  <div className="p-4 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1.5">
                     <span className="text-xs font-bold text-purple-400 uppercase tracking-wider block">
                       Executive Summary
                     </span>
@@ -201,7 +201,7 @@ ${n.thankYouEmailDraft}
                   {/* Strengths & Improvements 2-col */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Strengths */}
-                    <div className="p-4 rounded-2xl bg-slate-950/80 border border-emerald-500/20 space-y-2">
+                    <div className="p-4 rounded-lg bg-slate-950/80 border border-emerald-500/20 space-y-2">
                       <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
                         <Award className="h-4 w-4" /> Demonstrated Strengths:
                       </span>
@@ -213,7 +213,7 @@ ${n.thankYouEmailDraft}
                     </div>
 
                     {/* Improvements */}
-                    <div className="p-4 rounded-2xl bg-slate-950/80 border border-amber-500/20 space-y-2">
+                    <div className="p-4 rounded-lg bg-slate-950/80 border border-amber-500/20 space-y-2">
                       <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
                         <AlertCircle className="h-4 w-4" /> Opportunities for Growth:
                       </span>
@@ -244,7 +244,7 @@ ${n.thankYouEmailDraft}
 
                   {/* Action Items */}
                   {sessionData.notes.actionItems.length > 0 && (
-                    <div className="p-4 rounded-2xl bg-slate-950/80 border border-cyan-500/25 space-y-2">
+                    <div className="p-4 rounded-lg bg-slate-950/80 border border-cyan-500/25 space-y-2">
                       <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
                         <ListChecks className="h-4 w-4" /> Action Items Before Your Next Round
                       </span>
@@ -268,7 +268,7 @@ ${n.thankYouEmailDraft}
                     </span>
                     <div className="space-y-2.5">
                       {sessionData.answers.map((ans, idx) => (
-                        <div key={idx} className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2 text-xs">
+                        <div key={idx} className="p-3.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-2 text-xs">
                           <span className="font-bold text-white block">Q: &ldquo;{ans.questionText}&rdquo;</span>
                           <p className="text-slate-300 leading-relaxed">{ans.answerText}</p>
                         </div>
@@ -277,7 +277,7 @@ ${n.thankYouEmailDraft}
                   </div>
 
                   {/* Thank-You Email Draft */}
-                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                  <div className="p-4 rounded-lg bg-slate-950/80 border border-slate-800 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
                         <Mail className="h-4 w-4" /> Automated Post-Interview Thank-You Email Draft

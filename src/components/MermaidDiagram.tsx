@@ -142,7 +142,7 @@ export const MermaidDiagram: React.FC<{ code: string }> = ({ code }) => {
   const pos = new Map(laid.placed.map((p) => [p.node.id, p]));
 
   return (
-    <div className="my-3 rounded-2xl border border-emerald-500/25 bg-slate-950/80 p-3 space-y-2">
+    <div className="my-3 rounded-lg border border-emerald-500/25 bg-slate-950/80 p-3 space-y-2">
       <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
         System Design Diagram
       </span>

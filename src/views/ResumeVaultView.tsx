@@ -109,7 +109,7 @@ export const ResumeVaultView: React.FC = () => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-3xl border border-slate-800 bg-slate-900/80 backdrop-blur-md shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-xl border border-slate-800 bg-slate-900/80  ">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
             <FileText className="h-5 w-5" />
@@ -147,13 +147,13 @@ export const ResumeVaultView: React.FC = () => {
             handleFileUpload(e.dataTransfer.files[0]);
           }
         }}
-        className={`relative p-8 rounded-3xl border-2 border-dashed transition-all text-center space-y-3 ${
+        className={`relative p-8 rounded-xl border-2 border-dashed transition-all text-center space-y-3 ${
           dragActive
             ? 'border-emerald-500 bg-emerald-500/10'
             : 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
         }`}
       >
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 mx-auto">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 mx-auto">
           <Upload className="h-6 w-6" />
         </div>
         <div className="space-y-1">
@@ -166,7 +166,7 @@ export const ResumeVaultView: React.FC = () => {
         </div>
 
         <div>
-          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 cursor-pointer shadow-md transition-all">
+          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 cursor-pointer  transition-all">
             <Upload className="h-3.5 w-3.5" />
             <span>Browse Files</span>
             <input
@@ -184,7 +184,7 @@ export const ResumeVaultView: React.FC = () => {
       {/* 2-Column Split: Resume Profiles List vs Extracted Profile Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Uploaded Profiles (4 cols) */}
-        <div className="lg:col-span-4 rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg space-y-3">
+        <div className="lg:col-span-4 rounded-xl border border-slate-800 bg-slate-900/70 p-5  space-y-3">
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
             Uploaded Profiles ({resumes.length})
           </h2>
@@ -196,9 +196,9 @@ export const ResumeVaultView: React.FC = () => {
                 <div
                   key={r.id}
                   onClick={() => setSelectedResumeId(r.id)}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
                     isSelected
-                      ? 'border-emerald-500/50 bg-emerald-950/20 shadow-sm'
+                      ? 'border-emerald-500/50 bg-emerald-950/20 '
                       : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
                   }`}
                 >
@@ -251,7 +251,7 @@ export const ResumeVaultView: React.FC = () => {
         </div>
 
         {/* Right Column: Profile Intelligence Deep-Dive (8 cols) */}
-        <div className="lg:col-span-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg space-y-5">
+        <div className="lg:col-span-8 rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-5">
           {activeResume ? (
             <>
               {/* Profile Header */}
@@ -280,7 +280,7 @@ export const ResumeVaultView: React.FC = () => {
 
               {/* Summary */}
               {activeResume.parsedProfile?.summary && (
-                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
+                <div className="p-3.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     Professional Summary
                   </span>
@@ -315,7 +315,7 @@ export const ResumeVaultView: React.FC = () => {
                 </span>
                 <div className="space-y-3">
                   {(activeResume.parsedProfile?.experience || []).map((exp, idx) => (
-                    <div key={idx} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                    <div key={idx} className="p-4 rounded-lg bg-slate-950/80 border border-slate-800 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-xs text-white">{exp.role}</span>
                         <span className="text-xs text-emerald-400 font-semibold">{exp.company}</span>
@@ -358,8 +358,8 @@ export const ResumeVaultView: React.FC = () => {
 
       {/* Manual Paste Modal */}
       {showManualModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="relative w-full max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80  animate-in fade-in duration-150">
+          <div className="relative w-full max-w-xl rounded-lg border border-slate-800 bg-slate-900 p-6  space-y-4">
             <h3 className="text-base font-bold text-white">Paste Resume Profile</h3>
             <form onSubmit={handleManualUpload} className="space-y-3">
               <div>

@@ -98,7 +98,7 @@ export const AdminView: React.FC = () => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-3xl border border-purple-500/30 bg-slate-900/80 backdrop-blur-md shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-xl border border-purple-500/30 bg-slate-900/80  ">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
             <Shield className="h-5 w-5" />
@@ -128,19 +128,19 @@ export const AdminView: React.FC = () => {
       {/* KPI Overview */}
       {overview && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-1">
+          <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-1">
             <span className="text-[11px] text-slate-400 uppercase font-semibold">Total Accounts</span>
             <div className="text-2xl font-extrabold text-white font-mono">{overview.totalUsers}</div>
           </div>
-          <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-1">
+          <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-1">
             <span className="text-[11px] text-slate-400 uppercase font-semibold">Community Tier</span>
             <div className="text-2xl font-extrabold text-emerald-400 font-mono">100% Free</div>
           </div>
-          <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-1">
+          <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-1">
             <span className="text-[11px] text-slate-400 uppercase font-semibold">Total Sessions Run</span>
             <div className="text-2xl font-extrabold text-cyan-400 font-mono">{overview.totalSessions}</div>
           </div>
-          <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-1">
+          <div className="p-4 rounded-lg border border-slate-800 bg-slate-900/60 space-y-1">
             <span className="text-[11px] text-slate-400 uppercase font-semibold">Software License</span>
             <div className="text-2xl font-extrabold text-purple-400 font-mono">MIT Open Source</div>
           </div>
@@ -186,7 +186,7 @@ export const AdminView: React.FC = () => {
 
       {/* Tab: Users Management */}
       {activeTab === 'users' && (
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg space-y-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-4">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
@@ -238,7 +238,7 @@ export const AdminView: React.FC = () => {
 
       {/* Tab: System & AI Config */}
       {activeTab === 'settings' && settings && (
-        <form onSubmit={handleSaveSettings} className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg space-y-5 max-w-2xl">
+        <form onSubmit={handleSaveSettings} className="rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-5 max-w-2xl">
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <Cpu className="h-4 w-4 text-purple-400" /> Model Selection & Token Controls
           </h2>
@@ -282,7 +282,7 @@ export const AdminView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800">
+            <div className="flex items-center justify-between p-3.5 rounded-lg bg-slate-950/80 border border-slate-800">
               <div>
                 <span className="text-xs font-bold text-white block">Maintenance Mode</span>
                 <span className="text-[11px] text-slate-400">Blocks new live sessions temporarily</span>
@@ -298,7 +298,7 @@ export const AdminView: React.FC = () => {
 
           <button
             type="submit"
-            className="px-5 py-2.5 rounded-xl font-bold text-xs bg-purple-500 hover:bg-purple-400 text-slate-950 transition-colors shadow-md"
+            className="px-5 py-2.5 rounded-xl font-bold text-xs bg-purple-500 hover:bg-purple-400 text-slate-950 transition-colors "
           >
             Save Global System Settings
           </button>
@@ -307,7 +307,7 @@ export const AdminView: React.FC = () => {
 
       {/* Tab: Audit Logs */}
       {activeTab === 'audits' && (
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg space-y-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-6  space-y-4">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
@@ -343,8 +343,8 @@ export const AdminView: React.FC = () => {
 
       {/* User Management & Quota Modal */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="relative w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80  animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6  space-y-4">
             <h3 className="text-base font-bold text-white">
               Manage Member: {selectedUser.displayName}
             </h3>

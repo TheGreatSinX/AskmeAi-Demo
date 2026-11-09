@@ -15,6 +15,13 @@
 # is placeholders by design. The PEM needle is assembled from fragments so
 # this script never matches its own patterns.
 #
+# Narrow exception: src/lib/firebase.ts may contain an AIza key. The Firebase
+# WEB config (apiKey, authDomain, appId, ...) is a public client identifier by
+# design - it ships in every Firebase web bundle and grants no access on its
+# own (Firestore rules + App Check decide that). It is NOT a server secret:
+# real credentials (Gemini keys, firebase-admin service accounts) stay in
+# .env, which this hook still blocks everywhere.
+#
 # Deliberate bypass:  git commit --no-verify
 
 staged=$(git diff --cached --name-only --diff-filter=ACM)
@@ -45,6 +52,9 @@ while IFS='|' read -r label regex; do
     case "$file" in
       package-lock.json) continue ;;   # integrity hashes are base64
       .env.example) continue ;;        # placeholder template by design
+      src/lib/firebase.ts)
+        # Public Firebase web config: public client identifier by design.
+        if [ "$label" = "Google API key" ]; then continue; fi ;;
     esac
     # Read the STAGED blob, never the working tree. -I skips binary files and
     # -e keeps patterns that start with '-' from being parsed as options.

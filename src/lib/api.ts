@@ -17,12 +17,26 @@ import { getAuthToken, refreshAuthToken } from './authToken';
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Machine-readable detail, e.g. `backend-missing`. */
+  code?: string;
+
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
     this.name = 'ApiError';
   }
 }
+
+/**
+ * The API always answers JSON. Anything else (almost always index.html) means
+ * there is no backend behind this URL - the page is being served by a static
+ * server such as `npm run preview` instead of by the Express app that owns /api.
+ */
+export const BACKEND_MISSING_MESSAGE =
+  'Could not reach the AskMeAi API: this page is being served without its backend. ' +
+  'Run `npm run dev` (or `NODE_ENV=production npm start`) and open the URL it prints. ' +
+  '`npm run preview` only serves the built UI and has no API.';
 
 /**
  * Auth-aware fetch: attaches the Firebase ID token and transparently retries
@@ -46,21 +60,27 @@ async function request(path: string, init: RequestInit = {}, allowRefresh = true
   return res;
 }
 
-async function toError(res: Response, fallback: string): Promise<ApiError> {
-  let message = fallback;
-  try {
-    const body = await res.json();
-    if (body?.error) message = body.error;
-  } catch {
-    /* non-JSON error body */
-  }
-  return new ApiError(res.status, message);
-}
-
 async function json<T = any>(path: string, init: RequestInit = {}, fallback = 'Request failed'): Promise<T> {
   const res = await request(path, init);
-  if (!res.ok) throw await toError(res, fallback);
-  return res.json();
+  const text = (await res.text()).trim();
+
+  // Parse defensively: only a JSON document is a valid API answer.
+  let body: any = null;
+  if (text.startsWith('{') || text.startsWith('[')) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = null;
+    }
+  }
+
+  if (body === null) {
+    if (res.ok && text === '') return {} as T; // 204-style empty success
+    throw new ApiError(res.status, BACKEND_MISSING_MESSAGE, 'backend-missing');
+  }
+
+  if (!res.ok) throw new ApiError(res.status, body?.error || fallback);
+  return body as T;
 }
 
 function post(_path: string, body?: unknown): RequestInit {

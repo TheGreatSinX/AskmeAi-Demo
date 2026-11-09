@@ -48,6 +48,12 @@ interface AppContextType {
   setActiveTab: (tab: string) => void;
   setActiveSession: (session: InterviewSession | null) => void;
   refreshState: () => Promise<void>;
+  /**
+   * Set when the API behind this page is missing (the page was served without
+   * the Express server). The UI shows a full-screen notice instead of an app
+   * full of silent failures.
+   */
+  backendError: string | null;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   dismissToast: (id: string) => void;
   // Audio controls
@@ -94,6 +100,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [activeSession]);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [backendError, setBackendError] = useState<string | null>(null);
 
   // HUD and modal states
   const [hudOpen, setHudOpen] = useState<boolean>(false);
@@ -137,6 +144,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshState = useCallback(async () => {
     try {
       const data = await api.getInitialState();
+      setBackendError(null);
       setUser(data.user);
       setWallet(data.wallet);
       setSubscription(data.subscription);
@@ -158,6 +166,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     } catch (e: any) {
+      if (e?.code === 'backend-missing') {
+        // No API behind this URL: stop here and let the full-screen notice
+        // explain, instead of toasting every request for the whole session.
+        console.error('Backend unreachable:', e.message);
+        setBackendError(e.message);
+        return;
+      }
       console.error('Failed to load initial state:', e);
       showToast(e?.message || 'Could not sync with cloud database', 'error');
     }
@@ -450,6 +465,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveTab,
         setActiveSession,
         refreshState,
+        backendError,
         showToast,
         dismissToast,
         startListening,

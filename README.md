@@ -195,9 +195,10 @@ so the browser signs in against the Auth emulator as well.
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Express + Vite dev server |
+| `npm run dev` | Express + Vite dev server (API + UI on one port) |
 | `npm run build` | Production client bundle (`dist/`) |
-| `npm start` | Production server (`NODE_ENV=production npm start`) |
+| `npm start` | Express server — add `NODE_ENV=production` to serve `dist/` instead of Vite |
+| `npm run preview` | **Static preview only** — serves `dist/` with **no API**; the app shows "Cannot reach the AskMeAi server" |
 | `npm run lint` | TypeScript type-check |
 | `npm run clean` | Remove `dist/` |
 

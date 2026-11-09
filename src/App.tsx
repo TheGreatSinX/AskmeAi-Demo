@@ -18,10 +18,37 @@ import { KnowledgeBaseView } from './views/KnowledgeBaseView';
 import { NotesView } from './views/NotesView';
 import { OpenSourceView } from './views/OpenSourceView';
 import { AdminView } from './views/AdminView';
-import { CheckCircle2, AlertCircle, Info, X, Sparkles } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, X, Sparkles, RefreshCw } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { activeTab, toasts, dismissToast } = useApp();
+  const { activeTab, toasts, dismissToast, backendError, refreshState } = useApp();
+
+  // The page was served without the API behind it (static preview, wrong URL,
+  // proxy without /api). Explain once instead of failing request by request.
+  if (backendError) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-lg rounded-2xl border border-rose-500/30 bg-slate-900/70 p-8 text-center shadow-2xl shadow-black/50">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/15 text-rose-400">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <h1 className="text-lg font-bold text-white">Cannot reach the AskMeAi server</h1>
+          <p className="mt-3 text-sm leading-relaxed text-slate-400">{backendError}</p>
+          <p className="mt-4 text-[12px] text-slate-500">
+            This page is being served from{' '}
+            <span className="font-mono text-slate-400">{typeof window !== 'undefined' ? window.location.origin : ''}</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => void refreshState()}
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:ring-offset-2 focus:ring-offset-slate-950"
+          >
+            <RefreshCw className="h-4 w-4" /> Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">

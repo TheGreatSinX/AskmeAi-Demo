@@ -1009,6 +1009,24 @@ app.post('/api/admin/settings', requireAdmin, async (req: AuthedRequest, res: Re
 
 // Start Express server and mount Vite in development
 async function startServer() {
+  // Every real /api route is registered above. Anything under /api that did not
+  // match must answer JSON: the SPA fallbacks mounted below would otherwise
+  // serve index.html (GET) or a plain-text error page (POST), and the client
+  // cannot tell "backend missing" from "endpoint missing".
+  app.use('/api', (_req: Request, res: Response) => {
+    res.status(404).json({ error: 'Unknown API endpoint.' });
+  });
+
+  // Express' default error page is HTML; malformed JSON bodies must stay JSON
+  // for the same reason. Registered after the routes, so it only sees errors.
+  app.use('/api', (err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = Number(err?.status || err?.statusCode);
+    const httpStatus = status >= 400 && status < 600 ? status : 400;
+    res.status(httpStatus).json({
+      error: err?.type === 'entity.parse.failed' ? 'Invalid JSON body.' : 'Request failed.',
+    });
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({

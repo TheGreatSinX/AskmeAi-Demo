@@ -523,6 +523,53 @@ export class Database implements DataStore {
     this.save();
     return this.state.adminSettings;
   }
+
+  // Clear all data for a user (GDPR / right to be forgotten)
+  public async clearUserData(uid: string): Promise<void> {
+    // Remove user
+    this.state.users = this.state.users.filter((u) => u.uid !== uid);
+
+    // Remove devices
+    this.state.devices = this.state.devices.filter((d) => d.userId !== uid);
+
+    // Remove wallet
+    delete this.state.wallets[uid];
+
+    // Remove subscription
+    delete this.state.subscriptions[uid];
+
+    // Remove resumes
+    this.state.resumes = this.state.resumes.filter((r) => r.userId !== uid);
+
+    // Remove documents
+    this.state.documents = this.state.documents.filter((d) => d.userId !== uid);
+
+    // Remove sessions and all related data
+    const sessionIds = this.state.sessions
+      .filter((s) => s.userId === uid)
+      .map((s) => s.id);
+    this.state.sessions = this.state.sessions.filter((s) => s.userId !== uid);
+
+    // Remove transcripts for user's sessions
+    for (const sessionId of sessionIds) {
+      delete this.state.transcripts[sessionId];
+    }
+
+    // Remove answers for user's sessions
+    for (const sessionId of sessionIds) {
+      delete this.state.answers[sessionId];
+    }
+
+    // Remove notes for user's sessions
+    for (const sessionId of sessionIds) {
+      delete this.state.notes[sessionId];
+    }
+
+    // Remove credit transactions
+    this.state.transactions = this.state.transactions.filter((t) => t.userId !== uid);
+
+    this.save();
+  }
 }
 
 export const fileStore = new Database();

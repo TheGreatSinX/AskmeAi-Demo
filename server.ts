@@ -1549,6 +1549,28 @@ app.delete('/api/admin/enrolled-users/:email', requireAdmin, async (req: AuthedR
   res.json({ enrolled: next.enrolledEmails, removed: normalized });
 });
 
+// Clear all user data (GDPR / right to be forgotten)
+app.delete('/api/user/clear-data', requireAuth, async (req: AuthedRequest, res: Response) => {
+  const uid = req.auth!.uid;
+  try {
+    await db.clearUserData(uid);
+
+    await db.addAuditLog({
+      adminUserId: uid,
+      adminEmail: req.auth!.email,
+      targetUserId: uid,
+      action: 'USER_CLEARED_DATA',
+      details: `User cleared all personal data via GDPR right to be forgotten.`,
+      ipAddress: req.ip || '127.0.0.1',
+    });
+
+    res.json({ success: true, message: 'All your data has been cleared.' });
+  } catch (error: any) {
+    console.error('Clear user data error:', error);
+    res.status(500).json({ error: error.message || 'Failed to clear user data' });
+  }
+});
+
 // Start Express server and mount Vite in development
 async function startServer() {
   // Every real /api route is registered above. Anything under /api that did not

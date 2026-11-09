@@ -597,4 +597,76 @@ export class FirestoreStore implements DataStore {
     await this.col(COLLECTIONS.adminSettings).doc('global').set(next);
     return next;
   }
+
+  // Clear all data for a user (GDPR / right to be forgotten)
+  public async clearUserData(uid: string): Promise<void> {
+    const batch = this.db.batch();
+    const collectionsToClear: string[] = [
+      COLLECTIONS.users,
+      COLLECTIONS.devices,
+      COLLECTIONS.wallets,
+      COLLECTIONS.subscriptions,
+      COLLECTIONS.resumes,
+      COLLECTIONS.documents,
+      COLLECTIONS.transactions,
+      COLLECTIONS.auditLogs,
+    ];
+
+    // Delete user document
+    batch.delete(this.col(COLLECTIONS.users).doc(uid));
+
+    // Query and delete all documents owned by this user in other collections
+    const queries: Promise<void>[] = [];
+
+    // Devices: delete docs where userId == uid
+    queries.push(
+      this.col(COLLECTIONS.devices)
+        .where('userId', '==', uid)
+        .get()
+        .then((snap) => snap.docs.forEach((d) => batch.delete(d.ref)))
+    );
+
+    // Sessions: find all sessions for this user, then delete related data
+    queries.push(
+      this.col(COLLECTIONS.sessions)
+        .where('userId', '==', uid)
+        .get()
+        .then(async (snap) => {
+          const sessionIds: string[] = [];
+          snap.docs.forEach((doc) => {
+            sessionIds.push(doc.id);
+            batch.delete(doc.ref);
+          });
+
+          // Delete transcripts, answers, notes for each session
+          for (const sessionId of sessionIds) {
+            const tSnap = await this.col(COLLECTIONS.transcripts)
+              .where('sessionId', '==', sessionId)
+              .get();
+            tSnap.docs.forEach((d) => batch.delete(d.ref));
+
+            const aSnap = await this.col(COLLECTIONS.answers)
+              .where('sessionId', '==', sessionId)
+              .get();
+            aSnap.docs.forEach((d) => batch.delete(d.ref));
+
+            const nSnap = await this.col(COLLECTIONS.notes)
+              .where('sessionId', '==', sessionId)
+              .get();
+            nSnap.docs.forEach((d) => batch.delete(d.ref));
+          }
+        })
+    );
+
+    // Credit transactions
+    queries.push(
+      this.col(COLLECTIONS.transactions)
+        .where('userId', '==', uid)
+        .get()
+        .then((snap) => snap.docs.forEach((d) => batch.delete(d.ref)))
+    );
+
+    await Promise.all(queries);
+    await batch.commit();
+  }
 }

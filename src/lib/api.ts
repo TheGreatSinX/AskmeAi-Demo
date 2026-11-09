@@ -352,4 +352,9 @@ export const api = {
   async removeEnrolledUser(email: string) {
     return json(`/api/admin/enrolled-users/${encodeURIComponent(email)}`, { method: 'DELETE' }, 'Failed to remove enrolment');
   },
+
+  // Clear all user data (GDPR / right to be forgotten)
+  async clearUserData() {
+    return json('/api/user/clear-data', { method: 'DELETE' }, 'Failed to clear user data');
+  },
 };

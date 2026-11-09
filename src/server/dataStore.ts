@@ -125,4 +125,7 @@ export interface DataStore {
   addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): Promise<AuditLog>;
   getAdminSettings(): Promise<AdminSettings>;
   updateAdminSettings(settings: Partial<AdminSettings>): Promise<AdminSettings>;
+
+  // User data clearing (GDPR / right to be forgotten)
+  clearUserData(uid: string): Promise<void>;
 }

@@ -41,6 +41,10 @@ export const AdminView: React.FC = () => {
   const [inviteRole, setInviteRole] = useState<UserRole>('user');
   const [isInviting, setIsInviting] = useState(false);
 
+  // Clear all user data (GDPR / right to be forgotten)
+  const [clearDataConfirm, setClearDataConfirm] = useState('');
+  const [isClearing, setIsClearing] = useState(false);
+
   useEffect(() => {
     loadAdminData();
   }, []);  const loadAdminData = async () => {
@@ -117,6 +121,24 @@ export const AdminView: React.FC = () => {
       await loadAdminData();
     } catch (err: any) {
       showToast(err?.message || 'Could not remove enrolment', 'error');
+    }
+  };
+
+  const handleClearUserData = async () => {
+    if (clearDataConfirm !== 'DELETE') {
+      showToast('Please type DELETE to confirm', 'error');
+      return;
+    }
+    setIsClearing(true);
+    try {
+      await api.clearUserData();
+      showToast('All your data has been cleared', 'success');
+      setClearDataConfirm('');
+      await loadAdminData();
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to clear data', 'error');
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -341,6 +363,52 @@ export const AdminView: React.FC = () => {
             ) : (
               <p className="text-xs text-slate-500 text-center py-3">No enrolled accounts yet.</p>
             )}
+          </div>
+
+          {/* Danger Zone: Clear all user data */}
+          <div className="mt-8 pt-6 border-t border-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <p className="micro mb-1">Danger Zone</p>
+                <h3 className="text-sm font-semibold text-slate-100">Clear all your data</h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 mb-4">
+              This permanently deletes all your data: sessions, transcripts, answers,
+              notes, resumes, documents, devices, wallet, and subscription. This action
+              cannot be undone. Your account will remain enrolled but start blank.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-[0.1em] text-slate-400 font-semibold">
+                  Type DELETE to confirm
+                </label>
+                <input
+                  type="text"
+                  value={clearDataConfirm}
+                  onChange={(e) => setClearDataConfirm(e.target.value)}
+                  placeholder="DELETE"
+                  className={`w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-[12px] text-slate-100 ${
+                    clearDataConfirm === 'DELETE'
+                      ? 'border-emerald-500/60 text-emerald-400'
+                      : 'border-slate-800 placeholder-slate-600'
+                  } focus:border-emerald-500/60 focus:outline-none`}
+                />
+              </div>
+              <button
+                onClick={handleClearUserData}
+                disabled={isClearing || clearDataConfirm !== 'DELETE'}
+                className={`w-full rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-xs font-bold uppercase tracking-[0.08em] transition-colors ${
+                  clearDataConfirm === 'DELETE' && !isClearing
+                    ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30'
+                    : 'bg-slate-800 text-slate-500 hover:bg-slate-700'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {isClearing ? 'Clearing…' : 'Clear All My Data'}
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">

@@ -17,6 +17,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "askmeai",
   "main": "src/worker/index.ts",
+  // Builds dist/ before every deploy and dev run, so `npx wrangler deploy`
+  // (what Cloudflare Workers Builds runs on each push) works from a fresh clone.
+  "build": { "command": "npm run build", "watch_dir": "src" },
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   // Express 4 imports iconv-lite at startup; the real package does not bundle

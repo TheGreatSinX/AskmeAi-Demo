@@ -10,8 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "cf:dev": "vite build && wrangler dev",
-    "deploy": "vite build && wrangler deploy",
+    "cf:dev": "wrangler dev",
+    "deploy": "wrangler deploy",
     "test:demo": "tsx scripts/smoke-demo-api.mts",
     "test:notes": "tsx scripts/test-notes-summary.mts"
   },

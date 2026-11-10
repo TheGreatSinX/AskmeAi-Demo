@@ -57,8 +57,9 @@ dev and production run the same API. firebase-admin cannot run on Workers, so th
 `BACKUP_AI_MODELS`. Without `FIREBASE_SERVICE_ACCOUNT` every `/api` route except `/api/health`
 answers 503.
 
-**Deploy**: push to `main` (Cloudflare Workers Builds runs `npm run build` and `npx wrangler deploy`),
-or run `npm run deploy` locally. `npm run cf:dev` runs the Worker locally on port 8787.
+**Deploy**: push to `main`. Cloudflare Workers Builds runs `npx wrangler deploy`, which runs the
+`build.command` in `wrangler.jsonc` (`npm run build`) first, so `dist/` always exists. Or run
+`npm run deploy` locally. `npm run cf:dev` runs the Worker locally on port 8787.
 
 **Free-tier limits to watch**: Workers 100,000 requests/day and 10 ms CPU per request (time spent
 waiting on Firestore or the AI APIs does not count); Firestore Spark 50,000 reads and 20,000 writes

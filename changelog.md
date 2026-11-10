@@ -11,12 +11,27 @@ Every commit updates this file.
 
 ## 2026-11-10
 
-### This commit — docs: record the manual Worker deploy, live checks and CPU times
+### This commit — fix: build dist/ inside `wrangler deploy` so Workers Builds succeeds
+
+- **Cause:** Workers Builds *is* connected to Worker `askmeai` (earlier
+  entries said it was not; that was wrong). It runs only
+  `npx wrangler deploy`, with no build step. Before `b9b83cf` there was no
+  `wrangler.jsonc`, so wrangler detected Vite and built the site itself. With
+  the config, it expected an existing `dist/` and failed on every push since
+  `b9b83cf` ("assets.directory … does not exist: /opt/buildhome/repo/dist").
+  The live site was not affected: the manual deploys kept serving.
+- **Fix:** `wrangler.jsonc` `build.command: "npm run build"` (watch `src`), so
+  every `wrangler deploy` and `wrangler dev` builds `dist/` first. The
+  `deploy` / `cf:dev` npm scripts no longer build twice. README updated.
+- **Verified:** with `dist/` deleted (fresh-clone state),
+  `wrangler deploy --dry-run` ran the build, produced `dist/index.html` and
+  `dist/_headers`, and bundled the Worker (276 KiB gzip).
+
+### `151dc40` — docs: record the manual Worker deploy, live checks and CPU times
 
 - Adds the deploy, live verification and CPU figures to the `b9b83cf` entry.
-- Documentation only. Deployed after the push with `npm run build` +
-  `npx wrangler deploy` from a clean tree at this commit, because Workers
-  Builds is not connected to the repo.
+- Deployed by hand from a clean tree at `151dc40` (version `c8a833f8-…`).
+  The Workers Builds run for this push failed (see the fix above).
 
 ### `d2a3951`, `7f21c8d` — docs: changelog backfill, steering rule, Cloudflare secrets
 
@@ -75,9 +90,10 @@ headers, SPA fallback, GDPR clear); admin allow-list 4/4; `wrangler deploy
 `BACKUP_AI_MODELS` (from `.env`), `ADMIN_EMAILS` (both owner emails) and
 `FIREBASE_SERVICE_ACCOUNT`.
 
-**Deploy (console action, 2026-11-10 03:58 UTC):** pushing `7f21c8d` did not
-trigger Cloudflare Workers Builds (the repo is not connected to Worker
-`askmeai`), so it was deployed manually with `npm run build` +
+**Deploy (console action, 2026-11-10 03:58 UTC):** the Workers Builds run for
+`7f21c8d` failed because `dist/` was missing (fixed later, see the entry above;
+at the time this was wrongly read as "not connected"), so it was deployed
+manually with `npm run build` +
 `npx wrangler deploy` from a clean tree at `7f21c8d`: version `00dec4f7-…`,
 bundle 276 KiB gzip, startup 36 ms.
 

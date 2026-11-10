@@ -3,6 +3,7 @@ import path from 'path';
 import { initializeApp, getApps, cert, applicationDefault, App, Credential } from 'firebase-admin/app';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { PUBLIC_FIREBASE_PROJECT_ID } from '../lib/firebaseProject';
 
 /** How the credentials were obtained — decides how a failed probe is handled. */
 export type CredentialSource =
@@ -80,11 +81,14 @@ function resolveCredential(): { credential: Credential; source: CredentialSource
   return null;
 }
 
+/** Cloud Run / Cloud Functions / App Engine. */
+function onGoogleInfrastructure(): boolean {
+  return Boolean(process.env.K_SERVICE || process.env.FUNCTION_TARGET || process.env.GAE_ENV);
+}
+
 /** True when a service account is provable from the environment alone. */
 function hasAmbientCredentials(): boolean {
-  if (process.env.K_SERVICE || process.env.FUNCTION_TARGET || process.env.GAE_ENV) {
-    return true; // Cloud Run / Cloud Functions / App Engine
-  }
+  if (onGoogleInfrastructure()) return true;
   const gcloudDir =
     process.platform === 'win32'
       ? path.join(process.env.APPDATA || '', 'gcloud')
@@ -93,9 +97,10 @@ function hasAmbientCredentials(): boolean {
 }
 
 /**
- * Initializes firebase-admin exactly once. Returns null when no Firebase
- * credentials are configured, which switches the server to its local
- * JSON-file store and demo (unauthenticated) mode.
+ * Initializes firebase-admin exactly once. With no credentials at all it still
+ * initializes in verify-only mode for the browser's project (see
+ * src/lib/firebaseProject.ts), so ID tokens are always checked. Throws on a
+ * broken explicit configuration.
  */
 export function initFirebaseAdmin(): FirebaseAdminContext | null {
   try {
@@ -129,29 +134,43 @@ export function initFirebaseAdmin(): FirebaseAdminContext | null {
       );
     } else {
       const resolved = resolveCredential();
-      if (resolved) {
+      // A developer's cached `gcloud auth application-default login` must not
+      // silently point this server at a Firestore project nobody named. With
+      // no explicit project id, verify tokens only and keep data local. On
+      // Google infrastructure the runtime account is provisioned for the job,
+      // so it is still used (and an unreachable Firestore aborts startup).
+      const implicitLaptopAdc =
+        resolved?.source === 'ambient' && !projectId && !onGoogleInfrastructure();
+      if (resolved && !implicitLaptopAdc) {
         credential = resolved.credential;
         credentialSource = resolved.source;
       } else {
-        // No private key anywhere: ID tokens can still be verified against
+        if (implicitLaptopAdc) {
+          console.log(
+            '[Firebase] Ignoring Application Default Credentials because FIREBASE_PROJECT_ID is not set.'
+          );
+        }
+        // No private key in use: ID tokens can still be verified against
         // Google's public Secure Token certificates, which needs only the
         // project id. Firestore stays out of reach, so data remains local.
         credentialSource = 'verify-only';
       }
     }
 
+    // The project the browser signs users in to. src/lib/firebase.ts falls
+    // back to the same committed default, so a server with no Firebase env at
+    // all still verifies real ID tokens instead of trusting every caller.
+    const clientProjectId =
+      process.env.VITE_FIREBASE_PROJECT_ID?.trim() || PUBLIC_FIREBASE_PROJECT_ID;
+
     const resolvedProjectId =
       projectId ||
-      (credentialSource === 'verify-only'
-        ? process.env.VITE_FIREBASE_PROJECT_ID?.trim()
-        : undefined) ||
-      (isEmulator ? 'demo-askmeai' : undefined);
+      (isEmulator ? 'demo-askmeai' : undefined) ||
+      (credentialSource === 'verify-only' || credentialSource === 'ambient'
+        ? clientProjectId
+        : undefined);
 
     if (!resolvedProjectId) {
-      if (credentialSource === 'verify-only') {
-        // Nothing to verify against: plain local demo mode.
-        return null;
-      }
       throw new Error(
         'FIREBASE_PROJECT_ID (or GOOGLE_APPLICATION_CREDENTIALS with a project_id) is required.'
       );

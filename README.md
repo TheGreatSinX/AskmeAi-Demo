@@ -25,10 +25,12 @@ it deliberately: `git commit --no-verify`.
 No credential of any kind is stored in this repository; real keys live only in your local
 `.env` (git-ignored) or a git-ignored service-account file.
 
-With no Firebase configuration the server logs a warning and runs in **local demo mode**: data is
-stored in `data/database.json` and the seeded `Alex Rivers` (super_admin) account is used
-automatically — no sign-in screen. Once any Firebase configuration exists, ID tokens are required
-regardless of which store was selected.
+With no Firebase configuration the server runs in **verify-only** mode for the project the browser
+signs in to (`src/lib/firebaseProject.ts`): Google sign-in is required, ID tokens are checked against
+Google's public certificates, and data is stored in `data/database.json`. There is no
+unauthenticated fallback account. If firebase-admin cannot initialize, every `/api/*` route except
+`/api/health` answers `503`. To explore without signing in, open the app with `?demo=1` (in-browser
+demo backend, no server data).
 
 ---
 
@@ -39,11 +41,11 @@ never silently turns off sign-in:
 
 | Condition | Store | Auth |
 |---|---|---|
-| `DATA_BACKEND=file` | local `data/database.json` | **Firebase ID token required**, if firebase-admin can initialize (project id / credentials / emulators present); demo account otherwise |
+| `DATA_BACKEND=file` | local `data/database.json` | **Firebase ID token required**; `503` on every API route if firebase-admin cannot initialize |
 | Credentials reach Firestore (verified by a startup probe) | **Cloud Firestore** via `firebase-admin` | **Firebase ID token required** |
 | Credentials exist but Firestore is unreachable | local `data/database.json`, loud warning | **Firebase ID token required** (verification needs no Firestore access) |
 | Only a project id (no private key) | local `data/database.json` | **Firebase ID token required** — verify-only mode, checked against Google's public certificates |
-| Nothing configured | local `data/database.json` | demo account |
+| Nothing configured (local `gcloud` ADC is ignored without `FIREBASE_PROJECT_ID`) | local `data/database.json` | **Firebase ID token required** — verify-only for the browser's default project |
 
 ### 1. Create the project
 
@@ -107,7 +109,9 @@ FIREBASE_PROJECT_ID="your-project"
 With none of (a)–(c), the server falls back to Application Default Credentials
 (`gcloud auth application-default login`, or a runtime service account). With no private key at all
 it enters **verify-only** mode: data stays in `data/database.json`, but ID tokens are still
-verified for real. Only when no project id is resolvable either does it drop to demo mode.
+verified for real. On a developer machine, cached `gcloud` Application Default Credentials are only
+used when `FIREBASE_PROJECT_ID` is set, so the server never writes to a Firestore project you did not
+name.
 
 ### 5. Run
 
@@ -161,8 +165,7 @@ readable only by the signed-in user they name — no server code writes it today
 
 ### Authorization
 
-Every `/api/*` route except `/api/health` requires a verified token (or falls back to the demo
-account when Firebase is not configured). Sessions, resumes, documents and transcripts are scoped to
+Every `/api/*` route except `/api/health` requires a verified token; there is no fallback account. Sessions, resumes, documents and transcripts are scoped to
 `req.auth.uid`; `/api/admin/*` additionally requires the `super_admin`/`admin` role from the user
 document (`thegreatsinx@gmail.com` is seeded as `super_admin`).
 

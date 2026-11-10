@@ -1,5 +1,5 @@
 import { initFirebaseAdmin, FirebaseAdminContext } from './firebaseAdmin';
-import { fileStore, DEMO_USER_ID } from './db';
+import { fileStore } from './db';
 import { FirestoreStore } from './firestoreStore';
 import { DataStore } from './dataStore';
 
@@ -127,6 +127,3 @@ export const firebaseAdmin: FirebaseAdminContext | null = selected.admin;
 
 /** True when the server verifies real Firebase ID tokens (project id is enough). */
 export const authEnabled = Boolean(selected.admin);
-
-/** Fallback uid used only in local demo mode (no Firebase credentials). */
-export const DEMO_FALLBACK_UID = DEMO_USER_ID;

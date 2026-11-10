@@ -5,7 +5,8 @@ import { fileURLToPath } from 'url';
 import { randomBytes, createHash } from 'crypto';
 import { gemini, PRIMARY_MODEL } from './src/server/gemini.js';
 import { backupAi } from './src/server/backupAi.js';
-import { db, authEnabled, firebaseAdmin, DEMO_FALLBACK_UID } from './src/server/store.js';
+import { db, authEnabled, firebaseAdmin } from './src/server/store.js';
+import { PUBLIC_FIREBASE_AUTH_DOMAIN } from './src/lib/firebaseProject.js';
 import { TranscriptLine, SessionAnswer, SessionNotes, UserRole, User, AnswerStyle } from './src/types/index.js';
 import { EnrollmentError } from './src/server/dataStore.js';
 
@@ -26,10 +27,9 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 // Firebase Auth (Google popup) loads https://apis.google.com/js/api.js and then
 // talks to a hidden iframe on the authDomain. Both must be allowed by the CSP,
 // or the popup completes but the result never reaches this page and sign-in
-// fails with auth/popup-closed-by-user. Keep the default in sync with
-// PUBLIC_WEB_CONFIG.authDomain in src/lib/firebase.ts.
+// fails with auth/popup-closed-by-user.
 const FIREBASE_AUTH_DOMAIN =
-  process.env.VITE_FIREBASE_AUTH_DOMAIN?.trim() || 'socintel-111625-35761285-e248d.firebaseapp.com';
+  process.env.VITE_FIREBASE_AUTH_DOMAIN?.trim() || PUBLIC_FIREBASE_AUTH_DOMAIN;
 const AUTH_EMULATOR_ORIGIN = process.env.VITE_FIREBASE_AUTH_EMULATOR_HOST?.trim()
   ? `http://${process.env.VITE_FIREBASE_AUTH_EMULATOR_HOST.trim()}`
   : '';
@@ -169,44 +169,23 @@ interface AuthedRequest extends Request {
   auth?: AuthContext;
 }
 
-/** Whether the browser bundle was built with Firebase web configuration. */
-const clientAuthConfigured = Boolean(
-  process.env.VITE_FIREBASE_API_KEY && process.env.VITE_FIREBASE_PROJECT_ID
-);
-
 /**
  * Verifies the Firebase ID token sent as `Authorization: Bearer <token>` and
  * provisions the account document on first sign-in.
  *
- * When no Firebase credentials are configured on the server the request falls
- * back to the local demo account, so the app keeps working offline.
+ * Fails closed: if firebase-admin could not be initialized, every request is
+ * refused. There is no unauthenticated fallback account. The browser always
+ * signs in with Firebase (src/lib/firebase.ts ships a default project), so a
+ * fallback would hand every caller, signed in or not, the same admin account.
+ * Offline exploration uses the in-browser demo backend (?demo=1) instead.
  */
 async function attachAuth(req: AuthedRequest, res: Response, next: NextFunction) {
   if (!authEnabled) {
-    if (clientAuthConfigured) {
-      return res.status(503).json({
-        error:
-          'The client is configured for Firebase Auth but this server has no Firebase Admin credentials. ' +
-          'Set FIREBASE_SERVICE_ACCOUNT (or GOOGLE_APPLICATION_CREDENTIALS) and restart.',
-      });
-    }
-
-    // Local demo mode: no Firebase anywhere, use the seeded developer account.
-    const user = await db.ensureUser({
-      uid: DEMO_FALLBACK_UID,
-      email: 'platform@askmeai.local',
-      displayName: 'Platform Owner',
-      emailVerified: true,
+    return res.status(503).json({
+      error:
+        'Sign-in cannot be verified: this server could not initialize Firebase Admin. ' +
+        'Check the [Firebase] lines in the server log, fix the configuration and restart.',
     });
-    req.auth = {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-      emailVerified: user.emailVerified,
-      role: user.role,
-    };
-    return next();
   }
 
   const header = req.headers.authorization;

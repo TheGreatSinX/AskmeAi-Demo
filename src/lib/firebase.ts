@@ -1,5 +1,6 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth';
+import { PUBLIC_FIREBASE_AUTH_DOMAIN, PUBLIC_FIREBASE_PROJECT_ID } from './firebaseProject';
 
 const env = import.meta.env;
 
@@ -22,8 +23,8 @@ const env = import.meta.env;
  */
 const PUBLIC_WEB_CONFIG = {
   apiKey: 'AIzaSyBE2_HbiZIijisvntgAlXxzmm3xbdzZ9JI',
-  authDomain: 'socintel-111625-35761285-e248d.firebaseapp.com',
-  projectId: 'socintel-111625-35761285-e248d',
+  authDomain: PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: 'socintel-111625-35761285-e248d.firebasestorage.app',
   messagingSenderId: '864515612488',
   appId: '1:864515612488:web:fe3b243abbfd7dc59c5d7d',

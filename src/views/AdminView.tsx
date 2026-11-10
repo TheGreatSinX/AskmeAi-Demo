@@ -155,7 +155,7 @@ export const AdminView: React.FC = () => {
     }
   };
 
-  if (user?.role !== 'admin') {
+  if (user?.role !== 'admin' && user?.role !== 'super_admin') {
     return (
       <div className="py-24 text-center space-y-4 max-w-md mx-auto">
         <Lock className="h-12 w-12 text-rose-500 mx-auto" />

@@ -36,10 +36,11 @@ export class ApiError extends Error {
  * there is no backend behind this URL - the page is being served by a static
  * server such as `npm run preview` instead of by the Express app that owns /api.
  */
-export const BACKEND_MISSING_MESSAGE =
-  'Could not reach the AskMeAi API: this page is being served without its backend. ' +
-  'Run `npm run dev` (or `NODE_ENV=production npm start`) and open the URL it prints. ' +
-  '`npm run preview` only serves the built UI and has no API.';
+export const BACKEND_MISSING_MESSAGE = import.meta.env.DEV
+  ? 'Could not reach the AskMeAi API: this page is being served without its backend. ' +
+    'Run `npm run dev` (or `NODE_ENV=production npm start`) and open the URL it prints. ' +
+    '`npm run preview` only serves the built UI and has no API.'
+  : 'The AskMeAi service is temporarily unavailable. Please try again in a moment.';
 
 /**
  * Demo mode: this page has no API behind it, so requests are answered by the
@@ -122,13 +123,10 @@ async function json<T = any>(path: string, init: RequestInit = {}, fallback = 'R
   if (body === null) {
     if (res.ok && text === '') return {} as T; // 204-style empty success
 
-    // The response is our own SPA shell: the request never reached an API.
-    // Switch to the in-browser backend so the app keeps working.
-    if (looksLikeSpaShell(text)) {
-      setDemoMode(true);
-      return (await demoFetch(path, init)) as T;
-    }
-
+    // Non-JSON (usually our own SPA shell): the request never reached the API.
+    // Report it instead of falling back to demo data, so a signed-in user is
+    // never shown sample data in place of their account. The App offers
+    // "Retry" and an explicit "Explore the demo instead".
     throw new ApiError(res.status, BACKEND_MISSING_MESSAGE, 'backend-missing');
   }
 

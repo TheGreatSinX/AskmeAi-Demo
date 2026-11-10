@@ -10,6 +10,11 @@ data/database.json
 serviceAccount*.json
 *-firebase-adminsdk-*.json
 
+# Cloudflare Workers local state and local secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
+
 # Dependency directories
 node_modules/
 

@@ -1,0 +1,34 @@
+// Cloudflare Workers deployment for https://askmeai.thegreatsinx.workers.dev
+//
+//   - Static files in dist/ are served by Workers static assets (free, not
+//     counted against the request quota); the SPA fallback serves index.html.
+//   - Only /api/* runs the Worker (src/worker/index.ts), which hosts the
+//     Express API from src/server/app.ts.
+//
+// Secrets (set once with `npx wrangler secret put <NAME>`, never committed):
+//   FIREBASE_SERVICE_ACCOUNT  service-account JSON for the Firebase project
+//   GEMINI_API_KEYS           comma-separated Gemini keys
+//   BACKUP_AI_KEYS            comma-separated keys for the backup provider
+//   ADMIN_EMAILS              comma-separated owner emails allowed to become
+//                             super_admin (otherwise the first sign-up does)
+// Optional overrides, as secrets or vars: GEMINI_MODEL, GEMINI_MODEL_FALLBACKS,
+// BACKUP_AI_URL, BACKUP_AI_MODELS, BACKUP_AI_REASONING_EFFORT.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "askmeai",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Express 4 imports iconv-lite at startup; the real package does not bundle
+  // for Workers. UTF-8-only stand-in (the API only accepts UTF-8 JSON).
+  "alias": { "iconv-lite": "./src/worker/shims/iconv-lite.cjs" },
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "FIREBASE_PROJECT_ID": "socintel-111625-35761285-e248d"
+  },
+  "observability": { "enabled": true }
+}

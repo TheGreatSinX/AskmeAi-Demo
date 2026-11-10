@@ -34,6 +34,41 @@ demo backend, no server data).
 
 ---
 
+## Production: Cloudflare Workers (free tier)
+
+Live at **https://askmeai.thegreatsinx.workers.dev**. One Worker serves everything:
+
+```
+Browser ──► askmeai.thegreatsinx.workers.dev
+              /*       → dist/ via Workers static assets (free, SPA fallback, public/_headers)
+              /api/*   → src/worker/index.ts → Express API (src/server/app.ts)
+                           Firestore over REST (service account), ID tokens verified with jose
+```
+
+`src/server/app.ts` holds every route and is shared with the Node server (`server.ts`), so local
+dev and production run the same API. firebase-admin cannot run on Workers, so the Worker uses
+`src/server/firestoreRest.ts` / `firestoreRestStore.ts` (same collections and document ids as
+`firestoreStore.ts`) and `src/server/idToken.ts` (the same checks as `verifyIdToken`).
+
+**Secrets** (once, never committed): `npx wrangler secret put <NAME>` for
+`FIREBASE_SERVICE_ACCOUNT` (service-account JSON), `GEMINI_API_KEYS`, `BACKUP_AI_KEYS` and
+`ADMIN_EMAILS` (comma-separated owner emails; only these, with a verified Google email, become
+`super_admin`). Optional: `GEMINI_MODEL`, `GEMINI_MODEL_FALLBACKS`, `BACKUP_AI_URL`,
+`BACKUP_AI_MODELS`. Without `FIREBASE_SERVICE_ACCOUNT` every `/api` route except `/api/health`
+answers 503.
+
+**Deploy**: push to `main` (Cloudflare Workers Builds runs `npm run build` and `npx wrangler deploy`),
+or run `npm run deploy` locally. `npm run cf:dev` runs the Worker locally on port 8787.
+
+**Free-tier limits to watch**: Workers 100,000 requests/day and 10 ms CPU per request (time spent
+waiting on Firestore or the AI APIs does not count); Firestore Spark 50,000 reads and 20,000 writes
+per day. Admin-wide reads are capped at 500 documents per collection.
+
+The app never falls back to demo data on its own: if the API is unreachable it shows "service
+unavailable". The in-browser demo backend only starts with `?demo=1` or the explicit button.
+
+---
+
 ## Firebase integration
 
 The server picks its persistence layer and its authentication **independently** — a store failure

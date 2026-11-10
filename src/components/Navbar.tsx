@@ -63,7 +63,7 @@ export const Navbar: React.FC = () => {
 
   const isLive = activeSession?.status === 'active';
   const adminTab: TabDef[] =
-    user?.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: Shield }] : [];
+    user?.role === 'admin' || user?.role === 'super_admin' ? [{ id: 'admin', label: 'Admin', icon: Shield }] : [];
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-slate-950">

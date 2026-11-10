@@ -645,11 +645,23 @@ export class FirestoreStore implements DataStore {
       COLLECTIONS.auditLogs,
     ];
 
-    // Delete user document
+    // Delete the documents keyed by uid
     batch.delete(this.col(COLLECTIONS.users).doc(uid));
+    batch.delete(this.col(COLLECTIONS.wallets).doc(uid));
+    batch.delete(this.col(COLLECTIONS.subscriptions).doc(uid));
 
     // Query and delete all documents owned by this user in other collections
     const queries: Promise<void>[] = [];
+
+    // Resumes and knowledge documents hold the most personal data of all
+    for (const name of [COLLECTIONS.resumes, COLLECTIONS.documents]) {
+      queries.push(
+        this.col(name)
+          .where('userId', '==', uid)
+          .get()
+          .then((snap) => snap.docs.forEach((d) => batch.delete(d.ref)))
+      );
+    }
 
     // Devices: delete docs where userId == uid
     queries.push(

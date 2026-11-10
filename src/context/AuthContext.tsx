@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth';
 import { auth, authEnabled } from '../lib/firebase';
 import { setTokenProvider } from '../lib/authToken';
-import { isDemoMode, looksLikeSpaShell, onDemoModeChange, setDemoMode } from '../lib/api';
+import { isDemoMode, onDemoModeChange, setDemoMode } from '../lib/api';
 
 interface AuthContextType {
   /** VITE_FIREBASE_* configuration present in the browser bundle. */
@@ -120,10 +120,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const trimmed = text.trim();
         const isJson = trimmed.startsWith('{') || trimmed.startsWith('[');
-        if (!isJson) {
-          if (!res.ok || looksLikeSpaShell(text)) setDemoMode(true);
-          return;
-        }
+        // A non-JSON answer means the API is unreachable. Never switch to the
+        // demo backend on our own: a signed-in user would silently see sample
+        // data instead of their account. The app shows a "cannot reach the
+        // server" screen instead; demo mode only starts on request (?demo=1).
+        if (!isJson) return;
 
         const health = JSON.parse(trimmed);
         if (!authEnabled && health?.authRequired) {

@@ -1,14 +1,167 @@
 # Changelog — AskMeAi Interview Copilot
 
 All notable changes to this project are logged here, newest first.
-Entries are grouped by commit; every commit listed was pushed to `main`
-(`https://github.com/TheGreatSinX/AskmeAi-Demo`) and the live Cloudflare
-Worker deploy at `https://askmeai-demo.thegreatsinx.workers.dev` rebuilds
-automatically from GitHub.
+Entries are grouped by commit. Commits are pushed to `main`
+(`https://github.com/TheGreatSinX/AskmeAi-Demo`) unless marked
+*not yet pushed*; the live Cloudflare Worker at
+`https://askmeai.thegreatsinx.workers.dev` rebuilds automatically from GitHub.
+Every commit updates this file.
 
 ---
 
-## [Unreleased] — 2026-11-09
+## 2026-11-10
+
+### `b9b83cf` — feat: run the API on Cloudflare Workers (free tier) with Firestore over REST *(not yet pushed)*
+
+The live site was static files only, so after a real Google sign-in the app
+fell back to the in-browser demo user. Cloud Run needs the paid Blaze plan, so
+the API now runs in the same Cloudflare Worker that serves the site.
+
+- **One Worker, `askmeai`** (`wrangler.jsonc`): `dist/` is served as Workers
+  static assets with an SPA fallback; only `/api/*` runs the Worker
+  (`run_worker_first`).
+- **Shared API**: every route moved to `src/server/app.ts`, used by
+  `server.ts` (Node, firebase-admin, local dev) and `src/worker/index.ts`
+  (Workers). The entry point injects the store and the token verifier.
+- **Firestore over REST** (`firestoreRest.ts`, `firestoreRestStore.ts`):
+  firebase-admin cannot run on Workers. Same collections and document ids as
+  `firestoreStore.ts`; service-account OAuth via `jose`; transactional reads
+  via `batchGet`; transactions retried with backoff (10 concurrent deductions
+  on one wallet: no lost updates).
+- **ID token verification** (`idToken.ts`): `jose`, RS256 against Google's
+  securetoken keys, iss/aud/exp/iat/auth_time checks. Accepts a real
+  Google-signed token; rejects tampered, edited, unsigned (`alg: none`) and
+  other-project tokens. Emulator tokens only when an emulator host is set.
+- **`ADMIN_EMAILS` secret**: only listed owner emails with a verified Google
+  email become `super_admin`. Before, the first sign-up did, which on a public
+  site could be anyone.
+- **Fixes**: `requireAdmin` refused `super_admin` and the Admin tab hid it;
+  clear-data left wallets, subscriptions, resumes and documents behind (both
+  stores); async route errors hung requests or crashed Node (now a JSON 500);
+  production no longer switches to demo data on its own (shows "service
+  unavailable"; demo only with `?demo=1` or the button).
+- **Workers compatibility**: own JSON body parser (5 MB cap, 413) instead of
+  body-parser; `iconv-lite` aliased to a UTF-8 shim; client IP from
+  `CF-Connecting-IP` on Workers only.
+- **`public/_headers`**: CSP, COOP `same-origin-allow-popups`, HSTS, nosniff,
+  frame denial, Permissions-Policy; immutable caching for `/assets/*`.
+- New deps: `jose`, `wrangler` (dev). Scripts: `npm run cf:dev`, `npm run deploy`.
+
+**Verification:** lint, build, test:demo pass; Node server unchanged (health
+`firestore`, 401 without or with a forged token); 28/28 Worker checks against
+the Auth + Firestore emulators (own email shown, roles, cross-user 403,
+credits + ledger, AI answer generated in the Worker, 400/413/404 JSON, static
+headers, SPA fallback, GDPR clear); admin allow-list 4/4; `wrangler deploy
+--dry-run` bundle 276 KiB gzip. **Not yet deployed**: Worker secrets must be set
+first (`wrangler login` required).
+
+### `24c13a3` — sec: deny all client access in Firestore rules
+
+- `firestore.rules` now denies every client request. The browser never uses
+  Firestore; the API uses firebase-admin / a service account, which bypass rules.
+- The old rules let any signed-in Google account list every user's resumes,
+  sessions and transcripts (`list: if isSignedIn()`), write sessions and answers
+  directly (skipping credit charges), edit its own user doc and register
+  devices. They also contained a hardcoded personal email.
+- Emulator attack test as a stranger account: 8 of 9 attacks allowed before,
+  9 of 9 denied after.
+- **Deployed** to `socintel-111625-35761285-e248d` (ruleset `d52f6467-…`);
+  the live ruleset matches the repo file.
+
+### `fb9b19c` — fix: parse escaped FIREBASE_SERVICE_ACCOUNT and git-ignore key files
+
+- dotenv keeps `\"` inside double quotes and expands `\n`, so the README's
+  one-line escaped form never parsed; the server now unescapes it.
+- Parse errors report length, line count and a hint, never the value.
+- `.gitignore`: `serviceAccount*.json`, `*-firebase-adminsdk-*.json` (the
+  README said the key file was ignored; it was not).
+- Local setup (not in git): the multi-line JSON in `.env` was moved to a key
+  file outside the repo and referenced via `GOOGLE_APPLICATION_CREDENTIALS`.
+
+### `3f490c1` — sec: verify Google ID tokens always; remove demo-admin fallback
+
+- The browser always ships Firebase config, but the server only verified tokens
+  when its own env had Firebase settings. With no `.env` it treated every caller,
+  signed in or not, as the local demo admin.
+- `src/lib/firebaseProject.ts` shares the default project id and auth domain;
+  firebase-admin falls back to verify-only mode for that project.
+- Cached gcloud ADC is ignored on dev machines unless `FIREBASE_PROJECT_ID` is set.
+- `attachAuth` fails closed: 503 when firebase-admin cannot initialize.
+
+### `d1cc531` — fix: Google sign-in via popup and allow Firebase Auth in CSP
+
+- Back to `signInWithPopup`: the app is not served from the Firebase
+  authDomain, so browsers that partition third-party storage dropped the
+  redirect result and users landed on the login screen again.
+- CSP now allows `https://apis.google.com` and the authDomain /
+  `accounts.google.com` frames (the popup finished but its result never reached
+  the page). Google Fonts allowed; `object-src`, `base-uri`, `form-action`,
+  `frame-ancestors` added. COOP `same-origin-allow-popups` instead of `unsafe-none`.
+
+---
+
+## 2026-11-09
+
+### `ddb4381`, `fe4bc97`, `3b9356e`, `ec7337e`, `7786fe8` — sign-in COOP attempts
+
+Five commits switching between `signInWithPopup` and `signInWithRedirect` and
+between COOP `same-origin-allow-popups` and `unsafe-none`, to silence the
+"Cross-Origin-Opener-Policy would block the window.closed call" warning. That
+warning is benign; the actual causes were fixed in `d1cc531` above.
+
+### `3589ae3` — feat: allow any Google-authenticated account to sign in
+
+- Invitation-only check removed from account creation (`db.ts`,
+  `firestoreStore.ts`); new sign-ups get the `user` role.
+
+### `c3fbbec` — feat: modal-based clear data + bootstrap first admin
+
+- The first sign-up becomes `super_admin` when no admin exists (replaced by
+  `ADMIN_EMAILS` on Workers in `b9b83cf`).
+- Hardcoded owner email removed from seeded defaults; Clear All Data and
+  Revoke User confirmations moved to modals (no `window.confirm`).
+
+### `9290a12` — sec: remove hardcoded super admin
+### `4710933` — fix: remove demo notice from login page
+
+### `155dbd2` — feat: clear all user data (GDPR / right to be forgotten)
+
+- `DataStore.clearUserData()` (file + Firestore), `DELETE /api/user/clear-data`,
+  Danger Zone in the Admin Users tab, `USER_CLEARED_DATA` audit event.
+
+### `7cb38d2` — fix: remove hardcoded demo accounts from sign-in
+
+- New accounts start blank with their own Google name; seeded names replaced.
+
+### `197ff77` — sec: OWASP report, robots.txt, security.txt, .gitignore
+
+### `c3f3c3d` — sec: OWASP Top 10 remediation + hardened Firebase rules
+
+- Input validation and caps (credit adjustments, session status/duration,
+  admin settings allow-list, roles, emails, text lengths, 5 MB body, 8 MB audio).
+- `crypto.randomBytes` ids; LLM output sanitising; per-IP rate limits
+  (100/min general, 20/min auth-heavy); security headers; stricter rules.
+
+### `6b5b23b` — remove all mock data
+
+### `e52b092`, `a83232e`, `73a78b1`, `cd8804b` — Granola-style live transcription
+
+- Interim (partial) speech results shown live; questions detected from interim
+  text and answered early (debounced); speech recognition restarts on its own
+  and never blocks on network calls.
+
+### `e020ee7`, `869eedc` — ui: Sandbox & Desktop moved into the Admin tab
+
+- Coding sandbox and Electron guide are Quick Tools inside Admin; "Add User"
+  action with Google-only guidance.
+
+### `dee8afd` — sec: invitation-only enrolment + Firebase rules lock-down
+
+- Enrolled-emails list (cap 2), `EnrollmentError` → 403, admin enrolment panel
+  and `/api/admin/enrolled-users` routes, "not enrolled" wall.
+  (The sign-in restriction was later removed in `3589ae3`.)
+
+### `737dff3` — docs: log the Ink & Signal UI revamp and Google-only login in changelog
 
 ### `4e8f146` — feat: ParakeetAI create-session wizard (Details → Preferences)
 
@@ -307,7 +460,10 @@ npm run test:notes  # real-Gemini meeting-notes summarization
 
 - No credential ever appears in the public README or browser bundle; the
   only key in the client is Firebase's **public** web API key (by design).
-- All AI calls happen server-side (`firebase-admin`, Gemini keys in `.env`);
-  the pre-commit secret-scan hook blocks accidental commits.
+- All AI and Firestore calls happen server-side: Worker secrets in production,
+  `.env` locally. The pre-commit secret-scan hook blocks accidental commits
+  (enable it with `git config core.hooksPath .githooks`).
+- Firestore rules deny every client request; only the server's service
+  account reads and writes data.
 - Demo mode makes **zero network requests** and stores nothing but this
   browser's `localStorage`.

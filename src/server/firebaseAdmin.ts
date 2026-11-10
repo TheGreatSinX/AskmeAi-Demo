@@ -59,11 +59,23 @@ function resolveCredential(): { credential: Credential; source: CredentialSource
       json = fs.readFileSync(filePath, 'utf-8');
     }
 
+    let parsed: any;
     try {
-      return { credential: cert(JSON.parse(json)), source: 'explicit' };
+      parsed = parseServiceAccountJson(json);
     } catch (err: any) {
-      throw new Error(`Could not parse FIREBASE_SERVICE_ACCOUNT: ${err.message}`);
+      // Report the shape only, never the content: it holds a private key.
+      const lines = json.split(/\r?\n/).length;
+      const hint =
+        json.trim() === '{'
+          ? ' The value is just "{": dotenv reads an unquoted value up to the end of the line, so ' +
+            'multi-line JSON must be wrapped in single quotes, or put the file path ' +
+            '(e.g. ./serviceAccount.json) in GOOGLE_APPLICATION_CREDENTIALS instead.'
+          : '';
+      throw new Error(
+        `Could not parse FIREBASE_SERVICE_ACCOUNT (${json.length} chars, ${lines} line(s)): ${err.message}.${hint}`
+      );
     }
+    return { credential: cert(parsed), source: 'explicit' };
   }
 
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
@@ -79,6 +91,21 @@ function resolveCredential(): { credential: Credential; source: CredentialSource
   // No credentials at all: the caller falls back to verify-only mode when a
   // project id is known (ID tokens can be checked without a private key).
   return null;
+}
+
+/**
+ * Parses service-account JSON, tolerating the escaped one-line form
+ * `FIREBASE_SERVICE_ACCOUNT="{\"type\":...}"`. dotenv leaves `\"` as-is inside
+ * double quotes but turns `\n` into real newlines, so neither the quotes nor
+ * the private key survive as valid JSON. Undo both and retry once.
+ */
+function parseServiceAccountJson(json: string): any {
+  try {
+    return JSON.parse(json);
+  } catch (firstErr) {
+    if (!json.includes('\\"')) throw firstErr;
+    return JSON.parse(json.replace(/\\"/g, '"').replace(/\r?\n/g, '\\n'));
+  }
 }
 
 /** Cloud Run / Cloud Functions / App Engine. */

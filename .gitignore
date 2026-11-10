@@ -6,6 +6,10 @@ data/database.json
 .env.local
 .env.*.local
 
+# Firebase Admin service account keys (README: "the file is git-ignored")
+serviceAccount*.json
+*-firebase-adminsdk-*.json
+
 # Dependency directories
 node_modules/
 

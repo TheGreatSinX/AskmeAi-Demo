@@ -11,7 +11,15 @@ Every commit updates this file.
 
 ## 2026-11-10
 
-### `b9b83cf` — feat: run the API on Cloudflare Workers (free tier) with Firestore over REST *(not yet pushed)*
+### `d2a3951` + this commit — docs: changelog backfill, steering rule, Cloudflare secrets
+
+- `d2a3951`: entries for every commit since `4e8f146` (2026-11-09 and
+  2026-11-10), live URL updated, security invariants updated;
+  `.kiro/steering/changelog.md` makes every commit update this file and
+  requires asking before committing or pushing.
+- This commit records the Cloudflare secrets set for `b9b83cf` (below).
+
+### `b9b83cf` — feat: run the API on Cloudflare Workers (free tier) with Firestore over REST
 
 The live site was static files only, so after a real Google sign-in the app
 fell back to the in-browser demo user. Cloud Run needs the paid Blaze plan, so
@@ -52,8 +60,19 @@ the API now runs in the same Cloudflare Worker that serves the site.
 the Auth + Firestore emulators (own email shown, roles, cross-user 403,
 credits + ledger, AI answer generated in the Worker, 400/413/404 JSON, static
 headers, SPA fallback, GDPR clear); admin allow-list 4/4; `wrangler deploy
---dry-run` bundle 276 KiB gzip. **Not yet deployed**: Worker secrets must be set
-first (`wrangler login` required).
+--dry-run` bundle 276 KiB gzip.
+
+**Cloudflare secrets (console action, 2026-11-10):** set on Worker `askmeai`
+(account thegreatsinx@gmail.com), values never printed: `GEMINI_API_KEYS`,
+`GEMINI_MODEL`, `GEMINI_MODEL_FALLBACKS`, `BACKUP_AI_URL`, `BACKUP_AI_KEYS`,
+`BACKUP_AI_MODELS` (from `.env`), `ADMIN_EMAILS` (both owner emails) and
+`FIREBASE_SERVICE_ACCOUNT`.
+
+**Accepted risk:** `FIREBASE_SERVICE_ACCOUNT` is the project's existing
+firebase-adminsdk key (owner's choice), which has broader access than the
+Worker needs (it can also manage Auth users). A Firestore-only service account
+would limit the damage if the Cloudflare account were compromised. Keep 2FA on
+the Cloudflare account.
 
 ### `24c13a3` — sec: deny all client access in Firestore rules
 

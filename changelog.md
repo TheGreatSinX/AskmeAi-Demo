@@ -11,13 +11,20 @@ Every commit updates this file.
 
 ## 2026-11-10
 
-### `d2a3951` + this commit — docs: changelog backfill, steering rule, Cloudflare secrets
+### This commit — docs: record the manual Worker deploy, live checks and CPU times
+
+- Adds the deploy, live verification and CPU figures to the `b9b83cf` entry.
+- Documentation only. Deployed after the push with `npm run build` +
+  `npx wrangler deploy` from a clean tree at this commit, because Workers
+  Builds is not connected to the repo.
+
+### `d2a3951`, `7f21c8d` — docs: changelog backfill, steering rule, Cloudflare secrets
 
 - `d2a3951`: entries for every commit since `4e8f146` (2026-11-09 and
   2026-11-10), live URL updated, security invariants updated;
   `.kiro/steering/changelog.md` makes every commit update this file and
   requires asking before committing or pushing.
-- This commit records the Cloudflare secrets set for `b9b83cf` (below).
+- `7f21c8d` records the Cloudflare secrets set for `b9b83cf` (below).
 
 ### `b9b83cf` — feat: run the API on Cloudflare Workers (free tier) with Firestore over REST
 
@@ -67,6 +74,22 @@ headers, SPA fallback, GDPR clear); admin allow-list 4/4; `wrangler deploy
 `GEMINI_MODEL`, `GEMINI_MODEL_FALLBACKS`, `BACKUP_AI_URL`, `BACKUP_AI_KEYS`,
 `BACKUP_AI_MODELS` (from `.env`), `ADMIN_EMAILS` (both owner emails) and
 `FIREBASE_SERVICE_ACCOUNT`.
+
+**Deploy (console action, 2026-11-10 03:58 UTC):** pushing `7f21c8d` did not
+trigger Cloudflare Workers Builds (the repo is not connected to Worker
+`askmeai`), so it was deployed manually with `npm run build` +
+`npx wrangler deploy` from a clean tree at `7f21c8d`: version `00dec4f7-…`,
+bundle 276 KiB gzip, startup 36 ms.
+
+**Live verification:** 14/14 checks on askmeai.thegreatsinx.workers.dev with
+one throwaway account (removed from Firestore and Auth afterwards): health JSON
+(`backend: firestore`, `authRequired: true`), 401 without and with a forged
+token, CSP/COOP on the shell, real Google-signed token → 200 with role `user`
+(ADMIN_EMAILS works), admin route 403, session create + complete charges 1
+credit, clear-data. CPU per request (`wrangler tail`): median 6 ms, max 14 ms;
+2 of 10 requests over the free plan's 10 ms (first `/api/me` on a cold isolate,
+session completion), all finished `ok`. Wall time 0.3–4.1 s, mostly sequential
+Firestore round trips.
 
 **Accepted risk:** `FIREBASE_SERVICE_ACCOUNT` is the project's existing
 firebase-adminsdk key (owner's choice), which has broader access than the

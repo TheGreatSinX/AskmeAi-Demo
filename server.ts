@@ -23,15 +23,41 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
+// Firebase Auth (Google popup) loads https://apis.google.com/js/api.js and then
+// talks to a hidden iframe on the authDomain. Both must be allowed by the CSP,
+// or the popup completes but the result never reaches this page and sign-in
+// fails with auth/popup-closed-by-user. Keep the default in sync with
+// PUBLIC_WEB_CONFIG.authDomain in src/lib/firebase.ts.
+const FIREBASE_AUTH_DOMAIN =
+  process.env.VITE_FIREBASE_AUTH_DOMAIN?.trim() || 'socintel-111625-35761285-e248d.firebaseapp.com';
+const AUTH_EMULATOR_ORIGIN = process.env.VITE_FIREBASE_AUTH_EMULATOR_HOST?.trim()
+  ? `http://${process.env.VITE_FIREBASE_AUTH_EMULATOR_HOST.trim()}`
+  : '';
+
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com https://www.googleapis.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: https:",
+  `connect-src 'self' https://apis.google.com https://www.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://oauth2.googleapis.com ${AUTH_EMULATOR_ORIGIN}`.trim(),
+  `frame-src https://${FIREBASE_AUTH_DOMAIN} https://accounts.google.com ${AUTH_EMULATOR_ORIGIN}`.trim(),
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
 // Security headers on every response
 app.use((_req: Request, res: Response, next: NextFunction) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  // Allow popups (Google sign-in) to communicate with and close themselves
-  res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.googleapis.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://www.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://oauth2.googleapis.com;");
+  // Keeps this window isolated while still letting the Google sign-in popup
+  // it opens report back and close.
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
   next();
 });
 

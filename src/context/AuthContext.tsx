@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
-  signInWithRedirect,
+  signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  getRedirectResult,
   type User as FirebaseUser,
 } from 'firebase/auth';
 import { auth, authEnabled } from '../lib/firebase';
@@ -29,7 +28,7 @@ interface AuthContextType {
   enterDemo: () => void;
   /** True when the app may render its main shell (signed in, or running in demo mode). */
   ready: boolean;
-  /** The only sign-in path: Google via Firebase redirect. */
+  /** The only sign-in path: Google via Firebase popup. */
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -98,22 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    // Handle redirect result from Google sign-in (signInWithRedirect)
-    // When Google redirects back to this page, we capture the result here.
-    getRedirectResult(auth)
-      .then((result: any) => {
-        const user = result?.user;
-        if (user) {
-          userRef.current = user;
-          setFirebaseUser(user);
-        }
-        setInitializing(false);
-      })
-      .catch((err: any) => {
-        console.error('Redirect result error:', err);
-        setInitializing(false);
-      });
-
     return () => {
       unsubscribe();
       setTokenProvider(null);
@@ -164,8 +147,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = useCallback(async () => {
     if (!auth) throw new Error('Firebase Auth is not configured.');
+    // Popup, not redirect: the app is never served from the Firebase authDomain
+    // (localhost, workers.dev), and browsers that partition third-party storage
+    // drop the redirect result on the way back, so the user silently lands on
+    // the login screen again. The popup flow is unaffected. The console's
+    // "Cross-Origin-Opener-Policy would block the window.closed call" line is a
+    // benign Chrome warning about Google's own COOP, not a sign-in failure.
+    // https://firebase.google.com/docs/auth/web/redirect-best-practices
     try {
-      await signInWithRedirect(auth, new GoogleAuthProvider());
+      await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (err: any) {
       throw new Error(friendlyAuthError(err));
     }

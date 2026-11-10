@@ -56,8 +56,8 @@ firebase use --add               # select the project, sets .firebaserc
 firebase deploy --only firestore:rules
 ```
 
-> `firestore.rules` locks every collection down: users can only read their own documents,
-> wallets/subscriptions are server-writable only, and audit logs are admin-only.
+> `firestore.rules` denies every client request. The browser never talks to Firestore: all data
+> goes through the Express API, which uses `firebase-admin` (the Admin SDK bypasses rules).
 
 ### 2. Enable the sign-in methods
 

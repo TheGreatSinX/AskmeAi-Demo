@@ -1,208 +1,27 @@
 rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────
+// Deny every client request.
+//
+// The browser never reads or writes Firestore. All data flows through the
+// Express API (server.ts), which verifies the Firebase ID token, scopes every
+// query to req.auth.uid, enforces roles, credits and the device limit, and
+// talks to Firestore through firebase-admin. The Admin SDK bypasses these
+// rules, so the server keeps full access while direct client access, which
+// would skip every server-side check, is refused.
+//
+// The previous per-collection rules allowed any signed-in Google account to
+// list every user's resumes, sessions, transcripts, answers and notes, and to
+// write sessions and answers directly, skipping credit charges.
+//
+// If a client feature ever needs direct Firestore access, add a narrow rule
+// for that one path (owner-scoped get, owner-filtered list, validated write)
+// with an emulator attack test, rather than reopening whole collections.
+// ─────────────────────────────────────────────────────────────────────────
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ─────────────────────────────────────────────────────────────────
-    // Default deny ALL unknown collections (defense in depth)
-    // ─────────────────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Helper functions
-    // ─────────────────────────────────────────────────────────────────
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.role == 'super_admin' ||
-        request.auth.token.role == 'admin' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
-    }
-
-    function isEnrolled() {
-      return isSignedIn() && (
-        request.auth.token.email == 'thegreatsinx@gmail.com' ||
-        request.auth.token.email in get(/databases/$(database)/documents/admin_settings/global).data.enrolledEmails
-      );
-    }
-
-    function validUserDoc(resource) {
-      return resource.data.role in ['user', 'admin', 'support', 'super_admin'];
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Users Collection (invitation-only platform).
-    // Account documents are provisioned server-side by firebase-admin after a
-    // Google ID token is verified AND the email is on the enrolled list.
-    // Clients never create their own user doc — creation is admin-only here;
-    // the admin SDK bypasses these rules.
-    // ─────────────────────────────────────────────────────────────────
-    match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if (
-        (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'uid', 'email']))
-        || isAdmin()
-      );
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // User Devices (1 desktop + 1 mobile limit enforced by server)
-    // ─────────────────────────────────────────────────────────────────
-    match /user_devices/{deviceId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Credit Wallets — immutable from client; only server/admin can alter
-    // ─────────────────────────────────────────────────────────────────
-    match /credit_wallets/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Credit Transactions — append-only ledger; client can never write
-    // ─────────────────────────────────────────────────────────────────
-    match /credit_transactions/{txId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Subscriptions
-    // ─────────────────────────────────────────────────────────────────
-    match /subscriptions/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Resumes — user owns their own resumes
-    // ─────────────────────────────────────────────────────────────────
-    match /resumes/{resumeId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Documents (Knowledge Base) — user owns their own documents
-    // ─────────────────────────────────────────────────────────────────
-    match /documents/{docId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Sessions — user owns their own sessions; admins may bypass
-    // ─────────────────────────────────────────────────────────────────
-    match /sessions/{sessionId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Transcripts — read requires session ownership; create validated
-    // ─────────────────────────────────────────────────────────────────
-    match /session_transcripts/{transcriptId} {
-      allow get: if isSignedIn() && (
-        get(/databases/$(database)/documents/sessions/$(resource.data.sessionId)).data.userId == request.auth.uid || isAdmin()
-      );
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && (
-        get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.userId == request.auth.uid || isAdmin()
-      );
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Answers — read requires session ownership
-    // ─────────────────────────────────────────────────────────────────
-    match /session_answers/{answerId} {
-      allow get: if isSignedIn() && (
-        get(/databases/$(database)/documents/sessions/$(resource.data.sessionId)).data.userId == request.auth.uid || isAdmin()
-      );
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && (
-        get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.userId == request.auth.uid || isAdmin()
-      );
-      allow update: if isSignedIn() && (
-        get(/databases/$(database)/documents/sessions/$(resource.data.sessionId)).data.userId == request.auth.uid || isAdmin()
-      );
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Notes — user owns their own session notes
-    // ─────────────────────────────────────────────────────────────────
-    match /session_notes/{noteId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Audit Logs — admin only, append-only
-    // ─────────────────────────────────────────────────────────────────
-    match /audit_logs/{logId} {
-      allow get: if isAdmin();
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Admin membership markers — write reserved for server (admin SDK bypasses)
-    // ─────────────────────────────────────────────────────────────────
-    match /admins/{adminId} {
-      allow get: if isSignedIn() && request.auth.uid == adminId;
-      allow list: if isAdmin();
-      allow write: if false;
-    }
-
-    // ─────────────────────────────────────────────────────────────────
-    // Platform-wide admin settings — read by admin, write by server only
-    // ─────────────────────────────────────────────────────────────────
-    match /admin_settings/{settingId} {
-      allow get: if isAdmin();
-      allow list: if isAdmin();
-      allow write: if false;
     }
   }
 }
